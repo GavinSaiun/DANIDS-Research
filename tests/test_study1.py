@@ -100,8 +100,12 @@ def _make_run(root: Path, source: str, *, seed: int = 42) -> Path:
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     provenance = {
+        "dataset_fingerprints": {
+            dataset_id: f"synthetic-{dataset_id}-fingerprint" for dataset_id in CANONICAL_DOMAINS
+        },
         "feature_contract_version": "uq-netflow-v3-common-v1",
         "feature_count": 47,
+        "materializer_version": "task002-npy-v2",
         "preprocessor_version": "initial-median-standard-v1",
         "split_version": "task001-v1",
         "seed": seed,
@@ -305,6 +309,45 @@ def test_aggregator_rejects_duplicate_and_inconsistent_contracts(tmp_path: Path)
     )
     with pytest.raises(Study1AggregationError, match="inconsistent"):
         aggregate_static_study1([first, second], tmp_path / "inconsistent")
+
+
+def test_identical_dataset_fingerprints_are_accepted(tmp_path: Path) -> None:
+    runs = [_make_run(tmp_path / "inputs", source) for source in ("U", "T")]
+    output = aggregate_static_study1(runs, tmp_path / "accepted")
+    assert (output / "study1_transfer_long.csv").is_file()
+
+
+def test_changed_dataset_fingerprint_is_rejected(tmp_path: Path) -> None:
+    first = _make_run(tmp_path / "inputs", "U")
+    second = _make_run(tmp_path / "inputs", "T")
+    _rewrite_json(
+        second / "provenance.json",
+        lambda value: value["dataset_fingerprints"].update(U="changed-U-fingerprint"),
+    )
+    with pytest.raises(Study1AggregationError, match="dataset provenance differs for U"):
+        aggregate_static_study1([first, second], tmp_path / "mismatch")
+
+
+@pytest.mark.parametrize("case", ["missing", "incomplete"])
+def test_missing_or_incomplete_dataset_fingerprints_are_rejected(tmp_path: Path, case: str) -> None:
+    run = _make_run(tmp_path, "U")
+    if case == "missing":
+        _rewrite_json(run / "provenance.json", lambda value: value.pop("dataset_fingerprints"))
+    else:
+        _rewrite_json(run / "provenance.json", lambda value: value["dataset_fingerprints"].pop("B"))
+    with pytest.raises(Study1AggregationError, match="dataset_fingerprints"):
+        aggregate_static_study1([run], tmp_path / "invalid")
+
+
+def test_materializer_version_mismatch_is_rejected(tmp_path: Path) -> None:
+    first = _make_run(tmp_path / "inputs", "U")
+    second = _make_run(tmp_path / "inputs", "T")
+    _rewrite_json(
+        second / "provenance.json",
+        lambda value: value.update(materializer_version="different-materializer"),
+    )
+    with pytest.raises(Study1AggregationError, match="inconsistent"):
+        aggregate_static_study1([first, second], tmp_path / "mismatch")
 
 
 def test_partial_aggregation_is_explicit_and_does_not_fabricate_matrices(tmp_path: Path) -> None:

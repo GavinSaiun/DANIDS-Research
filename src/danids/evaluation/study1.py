@@ -66,6 +66,7 @@ class ValidatedRun:
     seed: int
     source: str
     sequence: tuple[str, ...]
+    dataset_fingerprints: tuple[tuple[str, str], ...]
     contract_signature: str
     final_holdouts: tuple[dict[str, str], ...]
     final_native_rows: tuple[dict[str, str], ...]
@@ -275,10 +276,36 @@ def _contract_signature(config: Mapping[str, Any], provenance: Mapping[str, Any]
         "feature_contract_version": _required(provenance, "feature_contract_version", "provenance"),
         "feature_count": _required(provenance, "feature_count", "provenance"),
         "preprocessor_version": _required(provenance, "preprocessor_version", "provenance"),
+        "materializer_version": provenance.get("materializer_version"),
         "split_version": _required(provenance, "split_version", "provenance"),
         "config_split_version": _nested(config, ("datasets", "split_version"), "config"),
     }
     return json.dumps(signature, sort_keys=True, separators=(",", ":"))
+
+
+def _dataset_fingerprints(
+    provenance: Mapping[str, Any], run_dir: Path
+) -> tuple[tuple[str, str], ...]:
+    raw = _required(provenance, "dataset_fingerprints", f"{run_dir}/provenance.json")
+    fingerprints = _mapping(raw, f"{run_dir}/provenance.json dataset_fingerprints")
+    actual_domains = set(fingerprints)
+    expected_domains = set(CANONICAL_DOMAINS)
+    if actual_domains != expected_domains:
+        missing = sorted(expected_domains.difference(actual_domains))
+        extra = sorted(actual_domains.difference(expected_domains))
+        raise Study1AggregationError(
+            f"{run_dir}: dataset_fingerprints must contain exactly U, T, C and B "
+            f"(missing={missing}, extra={extra})"
+        )
+    result: list[tuple[str, str]] = []
+    for dataset_id in CANONICAL_DOMAINS:
+        value = fingerprints[dataset_id]
+        if not isinstance(value, str) or not value.strip():
+            raise Study1AggregationError(
+                f"{run_dir}: dataset fingerprint for {dataset_id} must be a non-empty string"
+            )
+        result.append((dataset_id, value))
+    return tuple(result)
 
 
 def validate_static_study1_run(run_dir: str | Path) -> ValidatedRun:
@@ -387,6 +414,7 @@ def validate_static_study1_run(run_dir: str | Path) -> ValidatedRun:
         seed=seed,
         source=source,
         sequence=sequence,
+        dataset_fingerprints=_dataset_fingerprints(provenance, root),
         contract_signature=_contract_signature(config, provenance),
         final_holdouts=final_holdouts,
         final_native_rows=final_native,
@@ -533,10 +561,26 @@ def aggregate_static_study1(run_dirs: Sequence[str | Path], output_dir: str | Pa
         if identity in seen:
             raise Study1AggregationError(f"duplicate Study-1 run for seed/source {identity}")
         seen.add(identity)
+    reference = runs[0]
+    for run in runs[1:]:
+        if run.dataset_fingerprints != reference.dataset_fingerprints:
+            reference_fingerprints = dict(reference.dataset_fingerprints)
+            run_fingerprints = dict(run.dataset_fingerprints)
+            differing = [
+                dataset_id
+                for dataset_id in CANONICAL_DOMAINS
+                if reference_fingerprints[dataset_id] != run_fingerprints[dataset_id]
+            ]
+            raise Study1AggregationError(
+                "dataset provenance differs for "
+                + ", ".join(differing)
+                + f" between {reference.path} and {run.path}"
+            )
     signatures = {run.contract_signature for run in runs}
     if len(signatures) != 1:
         raise Study1AggregationError(
-            "input runs have inconsistent model/training/preprocessing/feature/split contracts"
+            "input runs have inconsistent model/training/preprocessing/materializer/feature/split "
+            "contracts"
         )
     runs.sort(key=lambda run: (run.seed, CANONICAL_DOMAINS.index(run.source)))
 
