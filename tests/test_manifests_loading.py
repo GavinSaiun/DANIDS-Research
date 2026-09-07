@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -84,6 +85,35 @@ def test_manifest_is_deterministic_and_round_trips(
     first.write(path)
     first.write(path)
     assert SplitManifest.from_json(path) == first
+
+
+@pytest.mark.parametrize(
+    ("role", "dataset_id", "range_key", "adjacent_key", "expected_message"),
+    [
+        ("initial", "B", "initial_train", "validation", "60/20/20"),
+        ("later", "U", "online_stream", "permanent_holdout", "80/20"),
+    ],
+)
+def test_persisted_manifest_rejects_incorrect_frozen_boundaries(
+    tmp_path: Path,
+    registry: DatasetRegistry,
+    contract: FeatureContract,
+    experiment: ExperimentConfig,
+    role: str,
+    dataset_id: str,
+    range_key: str,
+    adjacent_key: str,
+    expected_message: str,
+) -> None:
+    manifest = _manifest(registry, contract, experiment, dataset_id, role)
+    path = tmp_path / f"invalid-{role}.json"
+    raw = manifest.to_dict()
+    raw[range_key]["stop"] -= 1
+    raw[adjacent_key]["start"] -= 1
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ManifestError, match=expected_message):
+        SplitManifest.from_json(path)
 
 
 def test_changed_source_invalidates_manifest(

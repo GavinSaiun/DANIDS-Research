@@ -11,6 +11,7 @@ from danids.data.schema import (
     SchemaError,
     discover_core_feature_contract,
     is_identifier_or_absolute_time,
+    is_primary_excluded_port,
 )
 
 
@@ -42,7 +43,14 @@ def test_common_contract_uses_only_shared_features_and_excludes_sensitive_column
     registry: DatasetRegistry,
 ) -> None:
     contract = discover_core_feature_contract(registry)
-    assert contract.feature_columns == ("F1", "F2")
+    assert contract.feature_columns == (
+        "PROTOCOL",
+        "IN_BYTES",
+        "FLOW_DURATION_MILLISECONDS",
+        "MIN_IP_PKT_LEN",
+        "F1",
+        "F2",
+    )
     forbidden = {
         "Label",
         "Attack",
@@ -50,6 +58,8 @@ def test_common_contract_uses_only_shared_features_and_excludes_sensitive_column
         "IPV4_SRC_ADDR",
         "IPV4_DST_ADDR",
         "FLOW_ID",
+        "L4_SRC_PORT",
+        "L4_DST_PORT",
     }
     assert forbidden.isdisjoint(contract.feature_columns)
 
@@ -59,6 +69,13 @@ def test_identifier_guard_does_not_drop_ordinary_ip_packet_features() -> None:
     assert is_identifier_or_absolute_time("FLOW_END_MILLISECONDS")
     assert not is_identifier_or_absolute_time("MIN_IP_PKT_LEN")
     assert not is_identifier_or_absolute_time("FLOW_DURATION_MILLISECONDS")
+
+
+def test_primary_port_guard_is_exact_not_a_broad_substring_rule() -> None:
+    assert is_primary_excluded_port("L4_SRC_PORT")
+    assert is_primary_excluded_port("l4_dst_port")
+    assert not is_primary_excluded_port("PORTION_BYTES")
+    assert not is_primary_excluded_port("IMPORTANT_SCORE")
 
 
 def test_missing_required_schema_fails_loudly(

@@ -11,6 +11,17 @@ from danids.data.registry import CORE_DATASET_IDS, DatasetRegistry, DatasetSpec
 
 FEATURE_CONTRACT_VERSION = "uq-netflow-v3-common-v1"
 
+# The primary model deliberately excludes port identifiers. Port-inclusive
+# contracts belong to a future, explicitly named ablation rather than the
+# default feature-discovery path. These are exact normalized names: substring
+# matching would incorrectly exclude unrelated features such as PORTION_BYTES.
+PRIMARY_EXCLUDED_PORT_COLUMNS = frozenset(
+    {
+        "L4_SRC_PORT",
+        "L4_DST_PORT",
+    }
+)
+
 
 class SchemaError(ValueError):
     """Raised when raw data cannot satisfy the declared schema contract."""
@@ -44,6 +55,12 @@ def is_identifier_or_absolute_time(column: str) -> bool:
         "TIMESTAMP" in upper or upper.startswith("FLOW_START") or upper.startswith("FLOW_END")
     )
     return upper in {"FLOW_ID", "FLOWID"} or is_ip_address or is_absolute_time
+
+
+def is_primary_excluded_port(column: str) -> bool:
+    """Return whether an exact, recognized port identifier is primary-excluded."""
+
+    return column.upper() in PRIMARY_EXCLUDED_PORT_COLUMNS
 
 
 def read_csv_header(path: str | Path) -> tuple[str, ...]:
@@ -110,7 +127,9 @@ def discover_core_feature_contract(registry: DatasetRegistry) -> FeatureContract
             {
                 column
                 for column in header
-                if column not in excluded and not is_identifier_or_absolute_time(column)
+                if column not in excluded
+                and not is_identifier_or_absolute_time(column)
+                and not is_primary_excluded_port(column)
             }
         )
     common = set.intersection(*candidate_sets)

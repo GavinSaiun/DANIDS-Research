@@ -37,7 +37,8 @@ def test_preprocessor_fits_only_initial_history_and_not_future(
     assert isinstance(partitions, InitialDomainPartitions)
     processor = NumericPreprocessor().fit(partitions.train)
     # F1 is chronological 0..14 in train: median 7. Full-data median would be 12.
-    assert processor.medians[0] == pytest.approx(7.0)
+    f1_index = partitions.train.feature_columns.index("F1")
+    assert processor.medians[f1_index] == pytest.approx(7.0)
     before = processor.medians
     assert np.isfinite(processor.transform(partitions.train)).all()
     transformed = processor.transform(partitions.holdout)

@@ -17,6 +17,8 @@ from danids.data.registry import DatasetSpec
 from danids.data.schema import FeatureContract, read_csv_header, validate_schema
 
 MANIFEST_GENERATOR_VERSION = "task001-manifest-v1"
+INITIAL_TRAIN_FRACTION = 0.60
+SHARED_HOLDOUT_BOUNDARY = 0.80
 
 
 class ManifestError(ValueError):
@@ -114,12 +116,27 @@ class SplitManifest:
                 or self.online_stream is not None
             ):
                 raise ManifestError("initial domains require train/validation and no online stream")
+            expected_train, expected_validation, _, expected_holdout = _expected_ranges(
+                self.row_count, "initial"
+            )
+            if (
+                self.initial_train != expected_train
+                or self.validation != expected_validation
+                or self.permanent_holdout != expected_holdout
+            ):
+                raise ManifestError(
+                    "initial manifest ranges violate the frozen 60/20/20 boundaries"
+                )
         elif (
             self.initial_train is not None
             or self.validation is not None
             or self.online_stream is None
         ):
             raise ManifestError("later domains require only online stream and permanent holdout")
+        else:
+            _, _, expected_online, expected_holdout = _expected_ranges(self.row_count, "later")
+            if self.online_stream != expected_online or self.permanent_holdout != expected_holdout:
+                raise ManifestError("later manifest ranges violate the frozen 80/20 boundaries")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -192,19 +209,19 @@ def timestamp_sort_key(series: pd.Series) -> tuple[pd.Series, str, str]:
     return parsed, parsed.min().isoformat(), parsed.max().isoformat()
 
 
-def _ranges(
-    row_count: int, role: Literal["initial", "later"], splits: SplitRatios
+def _expected_ranges(
+    row_count: int, role: Literal["initial", "later"]
 ) -> tuple[IndexRange | None, IndexRange | None, IndexRange | None, IndexRange]:
     if role == "initial":
-        train_stop = int(row_count * splits.initial_train)
-        validation_stop = int(row_count * (splits.initial_train + splits.initial_validation))
+        train_stop = int(row_count * INITIAL_TRAIN_FRACTION)
+        validation_stop = int(row_count * SHARED_HOLDOUT_BOUNDARY)
         return (
             IndexRange(0, train_stop),
             IndexRange(train_stop, validation_stop),
             None,
             IndexRange(validation_stop, row_count),
         )
-    online_stop = int(row_count * splits.later_online)
+    online_stop = int(row_count * SHARED_HOLDOUT_BOUNDARY)
     return None, None, IndexRange(0, online_stop), IndexRange(online_stop, row_count)
 
 
@@ -239,7 +256,7 @@ def generate_split_manifest(
     source_sorted = bool(sort_key.is_monotonic_increasing)
     order = np.argsort(sort_key.to_numpy(), kind="stable")
     sorted_key = sort_key.iloc[order].reset_index(drop=True)
-    train, validation, online, holdout = _ranges(len(timestamps), role, resolved_splits)
+    train, validation, online, holdout = _expected_ranges(len(timestamps), role)
     preceding = validation if role == "initial" else online
     assert preceding is not None
     if sorted_key.iloc[preceding.stop - 1] > sorted_key.iloc[holdout.start]:

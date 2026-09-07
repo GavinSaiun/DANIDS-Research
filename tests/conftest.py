@@ -51,6 +51,12 @@ def benchmark_files(tmp_path: Path) -> dict[str, Path]:
                     "IPV4_SRC_ADDR": f"10.{offset}.0.{timestamp}",
                     "IPV4_DST_ADDR": f"192.168.{offset}.{timestamp}",
                     "FLOW_ID": f"{dataset_id}-{timestamp}",
+                    "L4_SRC_PORT": 10_000 + timestamp,
+                    "L4_DST_PORT": 80 if timestamp % 2 == 0 else 443,
+                    "PROTOCOL": 6,
+                    "IN_BYTES": 1_024 + timestamp,
+                    "FLOW_DURATION_MILLISECONDS": 50 + timestamp,
+                    "MIN_IP_PKT_LEN": 40,
                     "F1": float(timestamp),
                     "F2": (
                         "bad"

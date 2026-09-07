@@ -62,6 +62,9 @@ The required v3 schema defaults are `Label`, `Attack`,
 can be overridden per dataset in local configuration when a verified release
 uses different names.
 
+The primary common feature contract excludes source/destination port columns.
+Port-inclusive features are reserved for a future explicitly named ablation.
+
 ## Benchmark foundation
 
 ```text

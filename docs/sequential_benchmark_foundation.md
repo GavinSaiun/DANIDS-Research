@@ -15,6 +15,9 @@ TASK-001 supports CSV inputs. Header validation fails for missing required
 labels, chronology/IP metadata, duplicate columns, or an empty feature set. The
 common model feature contract is the intersection of eligible columns in U, T,
 B, and C, ordered according to U's header. Dataset-specific columns are excluded.
+Recognized port identifiers such as `L4_SRC_PORT` and `L4_DST_PORT` are also
+excluded from the primary contract. A port-inclusive contract is reserved for a
+future explicitly named ablation.
 The binary and exact native attack columns are stored independently. Absolute
 timestamps, IP addresses, and optional flow IDs remain metadata and never enter
 the feature matrix.
