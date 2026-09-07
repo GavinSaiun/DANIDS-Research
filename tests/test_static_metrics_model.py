@@ -29,6 +29,57 @@ def test_threshold_selection_is_conservative_and_deterministic() -> None:
         select_fpr_threshold(np.ones(3, dtype=np.int8), scores[:3], target_fpr=0.001)
 
 
+def test_threshold_selection_groups_tied_scores() -> None:
+    selected = select_fpr_threshold(
+        np.asarray([1, 0, 1, 0], dtype=np.int8),
+        np.asarray([0.9, 0.9, 0.8, 0.7], dtype=np.float64),
+        target_fpr=0.5,
+    )
+    assert selected.threshold == pytest.approx(0.8)
+    assert (selected.tp, selected.fp, selected.tn, selected.fn) == (2, 1, 1, 0)
+
+
+def test_threshold_selection_prefers_higher_threshold_when_tpr_is_tied() -> None:
+    selected = select_fpr_threshold(
+        np.asarray([1, 0, 0], dtype=np.int8),
+        np.asarray([0.9, 0.8, 0.7], dtype=np.float64),
+        target_fpr=1.0,
+    )
+    assert selected.threshold == pytest.approx(0.9)
+    assert (selected.tp, selected.fp) == (1, 0)
+
+
+def test_threshold_selection_accepts_exact_fpr_boundary() -> None:
+    selected = select_fpr_threshold(
+        np.asarray([1, 0, 1, 0, 0, 0], dtype=np.int8),
+        np.asarray([0.9, 0.8, 0.7, 0.6, 0.5, 0.4], dtype=np.float64),
+        target_fpr=0.25,
+    )
+    assert selected.threshold == pytest.approx(0.7)
+    assert selected.validation_fpr == pytest.approx(0.25)
+    assert selected.validation_tpr == pytest.approx(1.0)
+
+
+def test_threshold_selection_fails_when_no_observed_score_is_feasible() -> None:
+    with pytest.raises(ValueError, match="no observed validation-score threshold"):
+        select_fpr_threshold(
+            np.asarray([0, 1, 1], dtype=np.int8),
+            np.asarray([0.9, 0.8, 0.7], dtype=np.float64),
+            target_fpr=0.5,
+        )
+
+
+def test_threshold_selection_handles_full_validation_scale() -> None:
+    row_count = 500_000
+    labels = np.zeros(row_count, dtype=np.int8)
+    labels[::10] = 1
+    labels[-1] = 1
+    scores = np.linspace(0.0, 1.0, row_count, dtype=np.float64)
+    selected = select_fpr_threshold(labels, scores, target_fpr=0.001)
+    assert selected.threshold in scores
+    assert selected.validation_fpr <= 0.001
+
+
 def test_binary_operational_metrics_and_one_class_handling() -> None:
     labels = np.asarray([0, 0, 1, 1], dtype=np.int8)
     scores = np.asarray([0.1, 0.8, 0.4, 0.9], dtype=np.float64)

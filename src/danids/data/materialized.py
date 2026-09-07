@@ -29,7 +29,7 @@ from danids.data.types import (
 )
 from danids.streaming.prequential import PrequentialWindow
 
-MATERIALIZER_VERSION = "task002-npy-v1"
+MATERIALIZER_VERSION = "task002-npy-v2"
 
 
 def _cache_key(manifest: SplitManifest) -> str:
@@ -39,6 +39,9 @@ def _cache_key(manifest: SplitManifest) -> str:
         "feature_contract": manifest.feature_contract_version,
         "feature_columns": manifest.feature_columns,
         "split_version": manifest.split_version,
+        "timestamp_column": manifest.timestamp_column,
+        "binary_label_column": manifest.binary_label_column,
+        "native_attack_column": manifest.native_attack_column,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()[:20]
@@ -54,6 +57,9 @@ class CacheMetadata:
     source_sha256: str
     feature_contract_version: str
     split_version: str
+    timestamp_column: str
+    binary_label_column: str
+    native_attack_column: str
     materializer_version: str
 
 
@@ -95,6 +101,9 @@ def _write_metadata(path: Path, metadata: CacheMetadata) -> None:
         "source_sha256": metadata.source_sha256,
         "feature_contract_version": metadata.feature_contract_version,
         "split_version": metadata.split_version,
+        "timestamp_column": metadata.timestamp_column,
+        "binary_label_column": metadata.binary_label_column,
+        "native_attack_column": metadata.native_attack_column,
         "materializer_version": metadata.materializer_version,
     }
     path.write_text(
@@ -235,6 +244,9 @@ def materialize_dataset(
                 source_sha256=manifest.source.sha256,
                 feature_contract_version=manifest.feature_contract_version,
                 split_version=manifest.split_version,
+                timestamp_column=manifest.timestamp_column,
+                binary_label_column=manifest.binary_label_column,
+                native_attack_column=manifest.native_attack_column,
                 materializer_version=MATERIALIZER_VERSION,
             ),
         )
@@ -270,6 +282,9 @@ class MaterializedDataset:
             source_sha256=str(raw["source_sha256"]),
             feature_contract_version=str(raw["feature_contract_version"]),
             split_version=str(raw["split_version"]),
+            timestamp_column=str(raw["timestamp_column"]),
+            binary_label_column=str(raw["binary_label_column"]),
+            native_attack_column=str(raw["native_attack_column"]),
             materializer_version=str(raw["materializer_version"]),
         )
         expected = _cache_key(manifest)
@@ -281,6 +296,9 @@ class MaterializedDataset:
             or metadata.source_sha256 != manifest.source.sha256
             or metadata.feature_contract_version != manifest.feature_contract_version
             or metadata.split_version != manifest.split_version
+            or metadata.timestamp_column != manifest.timestamp_column
+            or metadata.binary_label_column != manifest.binary_label_column
+            or metadata.native_attack_column != manifest.native_attack_column
             or metadata.materializer_version != MATERIALIZER_VERSION
         ):
             raise DataLoadingError("materialized cache metadata differs from manifest")
@@ -450,6 +468,11 @@ def load_sorted_prefix_windows(
 ) -> Iterator[PrequentialWindow]:
     """Yield gated windows from a proven-chronological bounded raw prefix."""
 
+    manifest.validate()
+    if manifest.domain_role != "later" or manifest.online_stream is None:
+        raise DataLoadingError(
+            "raw-prefix smoke loading requires a later-domain manifest with an online stream"
+        )
     verify_manifest_source(manifest, spec)
     if not manifest.source_was_chronologically_sorted:
         raise DataLoadingError("a raw prefix is unsafe because the source is not chronological")

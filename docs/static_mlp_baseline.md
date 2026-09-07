@@ -27,6 +27,9 @@ numeric features, binary label, categorical native-attack code, and timestamp
 in read-only NumPy arrays. IP addresses, flow IDs, and port columns are not
 retained. The cache key covers the complete source-file fingerprint, feature
 contract and ordered feature names, split version, and materialiser version.
+The identity also includes the timestamp, binary-label, and native-attack raw
+column names, while deliberately excluding initial/later role so the same full
+chronological representation can be reused across sequence roles.
 
 Rows are stable-sorted by timestamp; stability preserves original source-file
 order for timestamp ties. Statistical preprocessing is a later operation and
@@ -77,10 +80,9 @@ Smoke output is marked as such and must not be reported as a Study-1 result.
   by binary attack membership. No semantic equivalence is inferred.
 - Undefined one-class discrimination metrics and zero-denominator threshold
   transfer ratios are emitted as null with an explicit reason.
-- A threshold just above the maximum validation score is included as the
-  conventional conservative ROC endpoint. This ensures the constrained rule
-  has a well-defined zero-positive candidate while preserving validation-only
-  selection.
+- Deployment-threshold candidates are unique observed validation scores only.
+  If none satisfies the FPR budget, selection fails instead of manufacturing
+  an above-maximum threshold.
 
 Continual learning, recalibration, semantic mapping, open-set methods, model
 health, alternative backbones, CICIoT2023, and port-inclusive ablation remain

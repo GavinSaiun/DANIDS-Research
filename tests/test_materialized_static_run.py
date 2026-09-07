@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -9,8 +10,13 @@ import pytest
 import torch
 
 from danids.config.static import load_static_experiment_config
+from danids.data.loading import DataLoadingError
 from danids.data.manifests import generate_split_manifest
-from danids.data.materialized import load_sorted_prefix_windows, materialize_dataset
+from danids.data.materialized import (
+    MaterializedDataset,
+    load_sorted_prefix_windows,
+    materialize_dataset,
+)
 from danids.data.preprocessing import NumericPreprocessor
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import FeatureContract
@@ -47,6 +53,21 @@ def test_materialized_cache_is_chronological_and_preprocessor_is_frozen(
         "metadata.json",
         "timestamp.npy",
     }
+    later_manifest = generate_split_manifest(
+        registry["B"],
+        contract,
+        role="later",
+        split_version=config.experiment.split_version,
+        seed=config.experiment.seed,
+    )
+    role_reused = materialize_dataset(
+        registry["B"],
+        contract,
+        later_manifest,
+        cache_root=tmp_path / "cache2",
+        chunk_rows=6,
+    )
+    assert role_reused.path == cached.path
     train = cached.partition(PartitionKind.INITIAL_TRAIN)
     processor = NumericPreprocessor().fit_source(train, batch_size=4)
     f1 = train.feature_columns.index("F1")
@@ -89,6 +110,45 @@ def test_materialized_cache_is_chronological_and_preprocessor_is_frozen(
     assert not hasattr(windows[0].prediction_view, "binary_labels")
     with pytest.raises(ProtocolOrderError, match="before"):
         windows[0].observe()
+    sorted_initial_manifest = generate_split_manifest(
+        registry["T"], contract, role="initial", split_version="test-v1", seed=42
+    )
+    with pytest.raises(DataLoadingError, match="later-domain manifest"):
+        list(
+            load_sorted_prefix_windows(
+                registry["T"],
+                contract,
+                sorted_initial_manifest,
+                window_size=6,
+                window_count=1,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("timestamp_column", "DIFFERENT_TIMESTAMP"),
+        ("binary_label_column", "DIFFERENT_BINARY_LABEL"),
+        ("native_attack_column", "DIFFERENT_NATIVE_ATTACK"),
+    ],
+)
+def test_materialized_cache_rejects_different_semantic_column_contract(
+    tmp_path: Path,
+    registry: DatasetRegistry,
+    contract: FeatureContract,
+    field: str,
+    replacement: str,
+) -> None:
+    manifest = generate_split_manifest(
+        registry["U"], contract, role="initial", split_version="test-v1", seed=42
+    )
+    cached = materialize_dataset(
+        registry["U"], contract, manifest, cache_root=tmp_path / "cache", chunk_rows=8
+    )
+    changed = replace(manifest, **{field: replacement})
+    with pytest.raises(DataLoadingError, match="metadata differs"):
+        MaterializedDataset.open(cached.path, changed)
 
 
 def test_training_rejects_holdout_and_freezes_parameters(
