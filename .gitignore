@@ -19,5 +19,6 @@ configs/datasets.local.yaml
 /manifests/
 /runs/
 /results/
+/study1/
 /checkpoints/
 /materialized/

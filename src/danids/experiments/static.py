@@ -11,7 +11,7 @@ import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,11 @@ import torch
 import yaml
 
 from danids.config.static import StaticExperimentConfig
-from danids.data.manifests import SplitManifest, generate_split_manifest
+from danids.data.manifests import (
+    SplitManifest,
+    generate_split_manifest,
+    verify_manifest_source,
+)
 from danids.data.materialized import (
     MATERIALIZER_VERSION,
     MaterializedDataset,
@@ -123,33 +127,48 @@ def _manifest_path(directory: Path, stage: int, dataset_id: str) -> Path:
     return directory / f"stage-{stage:02d}-{dataset_id}.json"
 
 
-def _load_or_generate_manifests(
+def load_or_generate_static_manifests(
     registry: DatasetRegistry,
     contract: FeatureContract,
     config: StaticExperimentConfig,
     directory: Path,
 ) -> list[SplitManifest]:
+    """Load or create manifests, rejecting stale or semantically mismatched reuse."""
+
     directory.mkdir(parents=True, exist_ok=True)
     manifests: list[SplitManifest] = []
     for stage, dataset_id in enumerate(config.experiment.sequence, start=1):
+        expected_role: Literal["initial", "later"] = "initial" if stage == 1 else "later"
         path = _manifest_path(directory, stage, dataset_id)
-        if path.exists():
+        loaded_existing = path.exists()
+        if loaded_existing:
             manifest = SplitManifest.from_json(path)
         else:
             manifest = generate_split_manifest(
                 registry[dataset_id],
                 contract,
-                role="initial" if stage == 1 else "later",
+                role=expected_role,
                 split_version=config.experiment.split_version,
                 seed=config.experiment.seed,
                 splits=config.experiment.splits,
             )
             manifest.write(path)
-        if (
-            manifest.dataset_id != dataset_id
-            or manifest.feature_columns != contract.feature_columns
-        ):
-            raise ValueError("manifest sequence/feature contract differs from the experiment")
+        mismatches: list[str] = []
+        expected_values: tuple[tuple[str, object, object], ...] = (
+            ("dataset ID", manifest.dataset_id, dataset_id),
+            ("domain role", manifest.domain_role, expected_role),
+            ("generation seed", manifest.generation_seed, config.experiment.seed),
+            ("split version", manifest.split_version, config.experiment.split_version),
+            ("feature contract version", manifest.feature_contract_version, contract.version),
+            ("ordered feature columns", manifest.feature_columns, contract.feature_columns),
+        )
+        for label, actual, expected in expected_values:
+            if actual != expected:
+                mismatches.append(f"{label}: recorded={actual!r}, expected={expected!r}")
+        if mismatches:
+            raise ValueError(f"manifest {path} is incompatible: " + "; ".join(mismatches))
+        if loaded_existing:
+            verify_manifest_source(manifest, registry[dataset_id])
         manifests.append(manifest)
     return manifests
 
@@ -179,7 +198,7 @@ def run_static_experiment(
         if real_sized:
             count = len(contract.feature_columns)
             raise ValueError(f"real core primary contract must contain 47 features, got {count}")
-    manifests = _load_or_generate_manifests(registry, contract, config, Path(manifest_dir))
+    manifests = load_or_generate_static_manifests(registry, contract, config, Path(manifest_dir))
     run_name = config.experiment.experiment_id + ("-smoke" if smoke is not None else "")
     output = Path(output_root) / run_name
     if output.exists():
