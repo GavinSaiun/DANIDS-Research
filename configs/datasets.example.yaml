@@ -1,0 +1,13 @@
+version: 1
+
+# Copy this file to configs/datasets.local.yaml (which is ignored by Git), then
+# set the environment variables below or replace path_env with an explicit path.
+datasets:
+  U:
+    path_env: DANIDS_U_PATH
+  T:
+    path_env: DANIDS_T_PATH
+  B:
+    path_env: DANIDS_B_PATH
+  C:
+    path_env: DANIDS_C_PATH

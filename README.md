@@ -37,7 +37,35 @@ Large datasets, checkpoints, and generated run outputs are not intended to be co
 - [`docs/attack_ontology.md`](docs/attack_ontology.md) — native attack labels, semantic harmonisation rules, and history-relative novelty definition.
 - [`docs/experiment_protocol.md`](docs/experiment_protocol.md) — run lifecycle, configuration contract, leakage rules, output schema, and statistical/reproducibility protocol.
 
-## Planned implementation structure
+## Installation
+
+Use the existing Python 3.11 Conda environment; the project does not create or
+manage a virtual environment:
+
+```powershell
+conda activate danids
+python -m pip install -e ".[dev]"
+```
+
+`environment.yml` records the same Python/environment name for reproducible
+Conda setup or update; it does not create an environment during installation.
+
+## Local dataset configuration
+
+Raw datasets stay outside Git. Copy `configs/datasets.example.yaml` to the
+ignored `configs/datasets.local.yaml`, then set `DANIDS_U_PATH`,
+`DANIDS_T_PATH`, `DANIDS_B_PATH`, and `DANIDS_C_PATH` to the four CSV files.
+Explicit absolute paths can be placed in the ignored local file instead.
+
+The required v3 schema defaults are `Label`, `Attack`,
+`FLOW_START_MILLISECONDS`, `IPV4_SRC_ADDR`, and `IPV4_DST_ADDR`. Column names
+can be overridden per dataset in local configuration when a verified release
+uses different names.
+
+The primary common feature contract excludes source/destination port columns.
+Port-inclusive features are reserved for a future explicitly named ablation.
+
+## Benchmark foundation
 
 ```text
 configs/
@@ -88,14 +116,34 @@ Every reported experiment should be traceable to:
 Git commit SHA + experiment config + dataset split manifest
 ```
 
+Validate schemas, generate immutable manifests, and inspect a dry run:
+
+```powershell
+danids validate --datasets-config configs/datasets.local.yaml
+danids generate-manifests `
+  --datasets-config configs/datasets.local.yaml `
+  --experiment-config configs/experiments/task001_u-t-c-b.yaml `
+  --output-dir manifests/task001
+danids dry-run `
+  --datasets-config configs/datasets.local.yaml `
+  --experiment-config configs/experiments/task001_u-t-c-b.yaml
+```
+
+Run all quality checks:
+
+```powershell
+pytest
+ruff check .
+mypy
+```
+
+See [`docs/sequential_benchmark_foundation.md`](docs/sequential_benchmark_foundation.md)
+for API guarantees and implementation assumptions.
+
 ## Current status
 
-**Phase 0 — Research specification and methodology freeze.**
-
-Next steps after the specification PR is accepted:
-
-1. audit the original `GavinSaiun/DANIDS` codebase;
-2. classify reusable components as KEEP / MODIFY / REPLACE / NEW;
-3. create the package/config/test skeleton;
-4. implement chronological split manifests and the prequential sequential benchmark;
-5. establish static cross-domain and continual-learning baselines before implementing DANIDS-Core.
+**TASK-001 — Sequential benchmark foundation.** The package now provides
+dataset registration, common-core schema discovery, chronological split
+manifests, leakage-safe preprocessing, structurally isolated holdouts, and
+prequential stream windows. Detector training and continual-learning methods
+remain later tasks.
