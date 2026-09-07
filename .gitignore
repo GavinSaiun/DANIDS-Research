@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.vscode/
+
+# Local configuration and external data
+configs/datasets.local.yaml
+/data/
+/datasets/
+
+# Generated research artefacts
+/manifests/
+/runs/
+/results/
+/checkpoints/
