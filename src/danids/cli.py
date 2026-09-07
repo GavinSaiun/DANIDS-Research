@@ -14,6 +14,7 @@ from danids.config.static import load_static_experiment_config
 from danids.data.manifests import SplitManifest, generate_split_manifest
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
+from danids.evaluation.study1 import aggregate_static_study1
 from danids.experiments.static import SmokeLimits, run_static_experiment
 from danids.utils.reproducibility import set_global_seed
 
@@ -146,6 +147,13 @@ def _run_static(args: argparse.Namespace) -> int:
     return 0
 
 
+def _aggregate_static_study1(args: argparse.Namespace) -> int:
+    output = aggregate_static_study1(args.run_dirs, args.output_dir)
+    summary = json.loads((output / "study1_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -184,6 +192,14 @@ def build_parser() -> argparse.ArgumentParser:
     run_static.add_argument("--smoke-holdout-rows", type=int, default=10_000)
     run_static.add_argument("--smoke-later-windows", type=int, default=1)
     run_static.set_defaults(handler=_run_static)
+
+    aggregate = subparsers.add_parser(
+        "aggregate-static-study1",
+        help="strictly aggregate completed static run artifacts for Study 1",
+    )
+    aggregate.add_argument("--run-dir", dest="run_dirs", required=True, action="append", type=Path)
+    aggregate.add_argument("--output-dir", required=True, type=Path)
+    aggregate.set_defaults(handler=_aggregate_static_study1)
     return parser
 
 
