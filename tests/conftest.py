@@ -118,6 +118,36 @@ def experiment_config(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def static_experiment_config(tmp_path: Path, experiment_config: Path) -> Path:
+    raw = yaml.safe_load(experiment_config.read_text(encoding="utf-8"))
+    raw["model"] = {
+        "name": "static_mlp",
+        "hidden_dimensions": [256, 128, 64],
+        "dropout": 0.20,
+    }
+    raw["training"] = {
+        "loss": "BCEWithLogitsLoss",
+        "optimizer": "AdamW",
+        "learning_rate": 0.001,
+        "weight_decay": 0.0001,
+        "batch_size": 8,
+        "evaluation_batch_size": 16,
+        "maximum_epochs": 2,
+        "early_stopping_patience": 1,
+        "early_stopping_metric": "validation_pr_auc",
+        "minimum_improvement": 0.0,
+        "shuffle_training": True,
+    }
+    raw["materialization"] = {
+        "cache_root": str(tmp_path / "cache"),
+        "csv_chunk_rows": 7,
+    }
+    path = tmp_path / "static.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    return path
+
+
+@pytest.fixture
 def registry(datasets_config: Path) -> DatasetRegistry:
     return DatasetRegistry.from_yaml(datasets_config)
 

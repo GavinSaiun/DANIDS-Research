@@ -20,3 +20,4 @@ configs/datasets.local.yaml
 /runs/
 /results/
 /checkpoints/
+/materialized/
