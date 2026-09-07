@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from danids.data.types import LearningBatch, PartitionKind, PredictionView
+from danids.data.types import ObservedStreamEvaluation, PredictionView
 
 
 class ProtocolOrderError(RuntimeError):
@@ -69,8 +69,8 @@ class PrequentialWindow:
             self._predictions = values
         self._state = WindowState.PREDICTED
 
-    def observe(self) -> LearningBatch:
-        """Reveal labels exactly once, and only after prediction was recorded."""
+    def observe(self) -> ObservedStreamEvaluation:
+        """Reveal labels once for offline evaluation, never as learning data."""
 
         if self._state is WindowState.AWAITING_PREDICTION:
             raise ProtocolOrderError(
@@ -79,14 +79,13 @@ class PrequentialWindow:
         if self._state is WindowState.OBSERVED:
             raise ProtocolOrderError(f"window {self.window_id} was already observed")
         self._state = WindowState.OBSERVED
-        return LearningBatch(
+        return ObservedStreamEvaluation(
             self.prediction_view.features,
             self._binary_labels,
             self._native_attack_labels,
             self.prediction_view.metadata,
             self.prediction_view.row_positions,
             self.prediction_view.feature_columns,
-            PartitionKind.ONLINE_STREAM,
         )
 
 

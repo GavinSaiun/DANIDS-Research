@@ -14,6 +14,7 @@ class PartitionKind(StrEnum):
     INITIAL_TRAIN = "initial_train"
     VALIDATION = "validation"
     ONLINE_STREAM = "online_stream"
+    ONLINE_EVALUATION = "online_evaluation"
     PERMANENT_HOLDOUT = "permanent_holdout"
 
 
@@ -106,7 +107,11 @@ class LabelledEvaluationSet(PredictionView):
         feature_columns: tuple[str, ...],
         partition_kind: PartitionKind,
     ) -> None:
-        if partition_kind not in {PartitionKind.VALIDATION, PartitionKind.PERMANENT_HOLDOUT}:
+        if partition_kind not in {
+            PartitionKind.VALIDATION,
+            PartitionKind.ONLINE_EVALUATION,
+            PartitionKind.PERMANENT_HOLDOUT,
+        }:
             raise TypeError(f"{partition_kind.value} is not an evaluation-only partition")
         super().__init__(features, metadata, row_positions, feature_columns)
         self._binary_labels = _readonly(binary_labels, dtype=np.int8)
@@ -167,6 +172,29 @@ class PermanentHoldout(LabelledEvaluationSet):
             row_positions,
             feature_columns,
             PartitionKind.PERMANENT_HOLDOUT,
+        )
+
+
+class ObservedStreamEvaluation(LabelledEvaluationSet):
+    """Labels revealed after prediction for offline evaluation, never learning."""
+
+    def __init__(
+        self,
+        features: NDArray[np.float32],
+        binary_labels: NDArray[np.int8],
+        native_attack_labels: NDArray[np.object_],
+        metadata: pd.DataFrame,
+        row_positions: NDArray[np.int64],
+        feature_columns: tuple[str, ...],
+    ) -> None:
+        super().__init__(
+            features,
+            binary_labels,
+            native_attack_labels,
+            metadata,
+            row_positions,
+            feature_columns,
+            PartitionKind.ONLINE_EVALUATION,
         )
 
 

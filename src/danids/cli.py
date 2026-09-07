@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from danids.config.experiment import ExperimentConfig, load_experiment_config
+from danids.config.static import load_static_experiment_config
 from danids.data.manifests import SplitManifest, generate_split_manifest
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
+from danids.experiments.static import SmokeLimits, run_static_experiment
 from danids.utils.reproducibility import set_global_seed
 
 
@@ -117,6 +119,33 @@ def _dry_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_static(args: argparse.Namespace) -> int:
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_static_experiment_config(args.experiment_config).with_runtime_overrides(
+        seed=args.seed, maximum_epochs=args.maximum_epochs
+    )
+    for dataset_id in config.experiment.sequence:
+        registry[dataset_id]
+    smoke = None
+    if args.smoke:
+        smoke = SmokeLimits(
+            training_rows=args.smoke_training_rows,
+            validation_rows=args.smoke_validation_rows,
+            holdout_rows=args.smoke_holdout_rows,
+            later_windows=args.smoke_later_windows,
+        )
+    output = run_static_experiment(
+        registry,
+        config,
+        manifest_dir=args.manifest_dir,
+        output_root=args.output_dir,
+        device_name=args.device,
+        smoke=smoke,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -138,6 +167,23 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--datasets-config", required=True, type=Path)
     dry_run.add_argument("--experiment-config", required=True, type=Path)
     dry_run.set_defaults(handler=_dry_run)
+
+    run_static = subparsers.add_parser(
+        "run-static", help="train and evaluate the frozen TASK-002 static MLP"
+    )
+    run_static.add_argument("--datasets-config", required=True, type=Path)
+    run_static.add_argument("--experiment-config", required=True, type=Path)
+    run_static.add_argument("--manifest-dir", required=True, type=Path)
+    run_static.add_argument("--output-dir", required=True, type=Path)
+    run_static.add_argument("--device", default="auto")
+    run_static.add_argument("--seed", type=int)
+    run_static.add_argument("--maximum-epochs", type=int)
+    run_static.add_argument("--smoke", action="store_true")
+    run_static.add_argument("--smoke-training-rows", type=int, default=20_000)
+    run_static.add_argument("--smoke-validation-rows", type=int, default=10_000)
+    run_static.add_argument("--smoke-holdout-rows", type=int, default=10_000)
+    run_static.add_argument("--smoke-later-windows", type=int, default=1)
+    run_static.set_defaults(handler=_run_static)
     return parser
 
 

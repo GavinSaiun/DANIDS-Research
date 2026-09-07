@@ -134,7 +134,9 @@ Run all quality checks:
 ```powershell
 pytest
 ruff check .
+ruff format --check .
 mypy
+python -m pip check
 ```
 
 See [`docs/sequential_benchmark_foundation.md`](docs/sequential_benchmark_foundation.md)
@@ -142,8 +144,10 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
-**TASK-001 — Sequential benchmark foundation.** The package now provides
-dataset registration, common-core schema discovery, chronological split
-manifests, leakage-safe preprocessing, structurally isolated holdouts, and
-prequential stream windows. Detector training and continual-learning methods
-remain later tasks.
+**TASK-002 — Static sequential MLP baseline.** The package now adds a
+disk-backed chronological materialisation path, initial-training-only numeric
+preprocessing, the frozen source-trained MLP, validation-only checkpoint and
+threshold selection, prequential target evaluation, and reconstructible
+metrics/checkpoint outputs. See
+[`docs/static_mlp_baseline.md`](docs/static_mlp_baseline.md). Continual learning
+and target adaptation remain later tasks.
