@@ -9,13 +9,21 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from danids.config.continual import load_continual_experiment_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
 from danids.config.static import load_static_experiment_config
+from danids.continual.supervision import load_or_create_supervision_schedule
 from danids.data.manifests import SplitManifest, generate_split_manifest
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
 from danids.evaluation.study1 import aggregate_static_study1
-from danids.experiments.static import SmokeLimits, run_static_experiment
+from danids.evaluation.study2 import aggregate_continual_study2
+from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
+from danids.experiments.static import (
+    SmokeLimits,
+    load_or_generate_static_manifests,
+    run_static_experiment,
+)
 from danids.utils.reproducibility import set_global_seed
 
 
@@ -154,6 +162,56 @@ def _aggregate_static_study1(args: argparse.Namespace) -> int:
     return 0
 
 
+def _generate_supervision_study2(args: argparse.Namespace) -> int:
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_continual_experiment_config(args.experiment_config).with_runtime_overrides(
+        seed=args.seed
+    )
+    contract = discover_core_feature_contract(registry)
+    manifests = tuple(
+        load_or_generate_static_manifests(registry, contract, config, args.manifest_dir)
+    )
+    schedule = load_or_create_supervision_schedule(
+        args.output, manifests, seed=config.experiment.seed
+    )
+    print(json.dumps(schedule.to_dict(), indent=2))
+    return 0
+
+
+def _run_continual(args: argparse.Namespace) -> int:
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_continual_experiment_config(args.experiment_config).with_runtime_overrides(
+        seed=args.seed, adaptation_epochs=args.adaptation_epochs
+    )
+    smoke = None
+    if args.smoke:
+        smoke = ContinualSmokeLimits(
+            later_stages=args.smoke_later_stages,
+            later_windows=args.smoke_later_windows,
+            holdout_rows=args.smoke_holdout_rows,
+            source_state_rows=args.smoke_source_state_rows,
+        )
+    output = run_continual_experiment(
+        registry,
+        config,
+        initial_run=args.initial_run,
+        manifest_dir=args.manifest_dir,
+        schedule_path=args.schedule,
+        output_root=args.output_dir,
+        device_name=args.device,
+        smoke=smoke,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
+    return 0
+
+
+def _aggregate_continual_study2(args: argparse.Namespace) -> int:
+    output = aggregate_continual_study2(args.static_runs, args.run_dirs, args.output_dir)
+    summary = json.loads((output / "study2_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -200,6 +258,49 @@ def build_parser() -> argparse.ArgumentParser:
     aggregate.add_argument("--run-dir", dest="run_dirs", required=True, action="append", type=Path)
     aggregate.add_argument("--output-dir", required=True, type=Path)
     aggregate.set_defaults(handler=_aggregate_static_study1)
+
+    generate_supervision = subparsers.add_parser(
+        "generate-supervision-study2",
+        help="generate/reuse the shared deterministic TASK-004 label schedule",
+    )
+    generate_supervision.add_argument("--datasets-config", required=True, type=Path)
+    generate_supervision.add_argument("--experiment-config", required=True, type=Path)
+    generate_supervision.add_argument("--manifest-dir", required=True, type=Path)
+    generate_supervision.add_argument("--output", required=True, type=Path)
+    generate_supervision.add_argument("--seed", type=int)
+    generate_supervision.set_defaults(handler=_generate_supervision_study2)
+
+    run_continual = subparsers.add_parser(
+        "run-continual", help="run one controlled TASK-004 continual baseline"
+    )
+    run_continual.add_argument("--datasets-config", required=True, type=Path)
+    run_continual.add_argument("--experiment-config", required=True, type=Path)
+    run_continual.add_argument("--initial-run", required=True, type=Path)
+    run_continual.add_argument("--manifest-dir", required=True, type=Path)
+    run_continual.add_argument("--schedule", required=True, type=Path)
+    run_continual.add_argument("--output-dir", required=True, type=Path)
+    run_continual.add_argument("--device", default="auto")
+    run_continual.add_argument("--seed", type=int)
+    run_continual.add_argument("--adaptation-epochs", type=int)
+    run_continual.add_argument("--smoke", action="store_true")
+    run_continual.add_argument("--smoke-later-stages", type=int, default=1)
+    run_continual.add_argument("--smoke-later-windows", type=int, default=2)
+    run_continual.add_argument("--smoke-holdout-rows", type=int, default=1_000)
+    run_continual.add_argument("--smoke-source-state-rows", type=int, default=1_000)
+    run_continual.set_defaults(handler=_run_continual)
+
+    aggregate_continual = subparsers.add_parser(
+        "aggregate-continual-study2",
+        help="strictly aggregate completed E1/E2 artifacts for Study 2",
+    )
+    aggregate_continual.add_argument(
+        "--static-run", dest="static_runs", required=True, action="append", type=Path
+    )
+    aggregate_continual.add_argument(
+        "--run-dir", dest="run_dirs", required=True, action="append", type=Path
+    )
+    aggregate_continual.add_argument("--output-dir", required=True, type=Path)
+    aggregate_continual.set_defaults(handler=_aggregate_continual_study2)
     return parser
 
 

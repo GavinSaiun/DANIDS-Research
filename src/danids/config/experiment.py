@@ -70,8 +70,10 @@ class ExperimentConfig:
             raise ExperimentConfigError("a TASK-001 sequence must not repeat a domain")
         if self.window_size <= 0:
             raise ExperimentConfigError("stream.window_size must be positive")
-        if self.boundary_mode not in {"task_free", "boundary_aware"}:
-            raise ExperimentConfigError("boundary_mode must be task_free or boundary_aware")
+        if self.boundary_mode not in {"task_free", "boundary_aware", "boundary_aware_control"}:
+            raise ExperimentConfigError(
+                "boundary_mode must be task_free, boundary_aware, or boundary_aware_control"
+            )
         if not 0.0 < self.target_fpr < 1.0:
             raise ExperimentConfigError("target_fpr must lie strictly between zero and one")
 

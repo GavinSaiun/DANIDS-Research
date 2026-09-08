@@ -11,13 +11,14 @@ import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import pandas as pd
 import torch
 import yaml
 
+from danids.config.experiment import ExperimentConfig
 from danids.config.static import StaticExperimentConfig
 from danids.data.manifests import (
     SplitManifest,
@@ -58,6 +59,11 @@ class SmokeLimits:
     def validate(self) -> None:
         if min(asdict(self).values()) <= 0:
             raise ValueError("all smoke limits must be positive")
+
+
+class ManifestExperimentConfig(Protocol):
+    @property
+    def experiment(self) -> ExperimentConfig: ...
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -130,7 +136,7 @@ def _manifest_path(directory: Path, stage: int, dataset_id: str) -> Path:
 def load_or_generate_static_manifests(
     registry: DatasetRegistry,
     contract: FeatureContract,
-    config: StaticExperimentConfig,
+    config: ManifestExperimentConfig,
     directory: Path,
 ) -> list[SplitManifest]:
     """Load or create manifests, rejecting stale or semantically mismatched reuse."""
