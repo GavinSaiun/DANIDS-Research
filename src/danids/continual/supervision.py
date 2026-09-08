@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,24 @@ from danids.data.types import LearningBatch, ObservedStreamEvaluation, Partition
 from danids.streaming.prequential import PrequentialWindow, WindowState
 
 SUPERVISION_SCHEDULE_VERSION = "task004-first-window-uniform-v1"
+ROW_POSITIONS_DIGEST_VERSION = "task004-row-positions-v1"
+
+
+def row_positions_digest(positions: Sequence[int] | np.ndarray[Any, Any]) -> str:
+    """Hash a canonical sorted integer representation of actual adaptation rows."""
+
+    values = np.asarray(positions)
+    if values.ndim != 1:
+        raise ValueError("row positions must be one-dimensional")
+    canonical = sorted(int(value) for value in values)
+    if len(canonical) != len(set(canonical)):
+        raise ValueError("row positions must be distinct")
+    payload = json.dumps(
+        {"version": ROW_POSITIONS_DIGEST_VERSION, "positions": canonical},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,10 +271,12 @@ class DelayedLabelQueue:
 
 
 __all__ = [
+    "ROW_POSITIONS_DIGEST_VERSION",
     "SUPERVISION_SCHEDULE_VERSION",
     "DelayedLabelQueue",
     "SupervisionEntry",
     "SupervisionSchedule",
     "generate_supervision_schedule",
     "load_or_create_supervision_schedule",
+    "row_positions_digest",
 ]

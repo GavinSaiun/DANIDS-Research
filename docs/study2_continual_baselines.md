@@ -29,6 +29,11 @@ prediction/evaluation only. Permanent holdout objects are evaluator-only types
 and are scored at `source_initial`, `pre_adapt`, `post_adapt`, `domain_end` and
 `final`; their results never control a method.
 
+Each adaptation log hashes the sorted row positions of the actual released
+`LearningBatch`. Artifact validation recomputes the expected hash from the
+persisted schedule. Later EWC Fisher and ER/FT-Mem memory positions must equal
+those same 100 scheduled positions exactly.
+
 All methods use BCEWithLogitsLoss and AdamW with learning rate `1e-4`, weight
 decay `1e-4`, batch size 64 and 20 epochs. There is no target validation, target
 early stopping, threshold recalibration or preprocessor refit.
@@ -66,6 +71,8 @@ BWT is final minus learned-state performance. The runner also writes mean BWT,
 average seen-domain and worst previous-domain performance. FPR remains an
 operational metric: its pre/post delta is emitted separately with an explicit
 `lower_is_better` direction and is not interpreted as a retention improvement.
+Forgetting begins at `source_initial` for the source domain and at `post_adapt`
+for later domains; pre-adaptation zero-shot measurements are excluded.
 
 Each run writes resolved config and provenance, the schedule, window/holdout/
 retention/native metrics, adaptation log, gain/forgetting/BWT/stage summaries,
@@ -78,6 +85,12 @@ scientific contracts across methods. Partial sets are clearly incomplete;
 complete sets contain all four methods. Multi-seed summaries use sample
 standard deviation (`ddof=1`). Static and adaptive final holdout/native rows are
 both retained.
+
+Provenance records initial-training, validation, online-stream and permanent-
+holdout ranges explicitly. The validator uses them to prove source Fisher and
+memory rows came only from initial training and later state came only from the
+online stream. It also recomputes gain, forgetting, BWT and stage summaries from
+`holdout_metrics.csv` and rejects stale or corrupted derived artifacts.
 
 ## Commands
 

@@ -35,6 +35,7 @@ from danids.continual.supervision import (
     SupervisionSchedule,
     generate_supervision_schedule,
     load_or_create_supervision_schedule,
+    row_positions_digest,
 )
 from danids.data.manifests import IndexRange, SourceFingerprint, SplitManifest
 from danids.data.preprocessing import NumericPreprocessor
@@ -239,6 +240,22 @@ def test_delayed_labels_release_exactly_once() -> None:
         queue.release_after_prediction(second)
 
 
+def test_returned_adaptation_row_digest_uses_actual_released_positions() -> None:
+    entry = generate_supervision_schedule(_manifests(), seed=42).entries[0]
+    first = _window(_batch(50_000, kind=PartitionKind.ONLINE_STREAM), 0)
+    first.mark_predicted()
+    queue = DelayedLabelQueue(entry)
+    queue.request(first.observe())
+    second = _window(_batch(1, kind=PartitionKind.ONLINE_STREAM, offset=50_000), 1)
+    second.mark_predicted()
+    second.observe()
+    released = queue.release_after_prediction(second)
+    assert released is not None
+    assert row_positions_digest(released.row_positions) == row_positions_digest(
+        entry.chronological_positions
+    )
+
+
 def test_uniform_memory_is_deterministic_and_capped() -> None:
     batch = _batch(20)
     first = uniform_exemplars(batch, domain_id="U", capacity=7, seed=4)
@@ -273,6 +290,23 @@ def test_embedding_herding_is_deterministic_and_stratified() -> None:
     assert first.batch.row_positions.tolist() == second.batch.row_positions.tolist()
     assert np.bincount(first.batch.binary_labels, minlength=2).tolist() == [3, 3]
     assert first.selection == "embedding_mean_herding"
+
+
+def test_later_memory_retains_all_returned_rows_when_under_capacity() -> None:
+    model, preprocessor = _model_and_preprocessor()
+    returned = _batch(100, kind=PartitionKind.ONLINE_STREAM, offset=500)
+    er = uniform_exemplars(returned, domain_id="T", capacity=400, seed=7)
+    ft_mem = embedding_herding_exemplars(
+        returned,
+        model,
+        preprocessor,
+        domain_id="T",
+        capacity=400,
+        device=torch.device("cpu"),
+    )
+    expected = returned.row_positions.tolist()
+    assert er.batch.row_positions.tolist() == expected
+    assert ft_mem.batch.row_positions.tolist() == expected
 
 
 def test_replay_batches_mix_target_and_historical_examples() -> None:
@@ -386,6 +420,51 @@ def test_final_forgetting_is_peak_since_learning_minus_final() -> None:
     rows = final_forgetting(_metric_rows(), SEQUENCE)
     source = next(item for item in rows if item["domain_id"] == "U" and item["metric"] == "pr_auc")
     assert source["forgetting"] == pytest.approx(0.12)
+
+
+@pytest.mark.parametrize("metric", ["pr_auc", "roc_auc", "tpr"])
+def test_later_domain_forgetting_starts_at_post_adapt(metric: str) -> None:
+    rows = [
+        {
+            "stage": 1,
+            "event": "source_initial",
+            "event_index": 1,
+            "holdout_dataset_id": "U",
+            metric: 0.8,
+        },
+        {
+            "stage": 2,
+            "event": "pre_adapt",
+            "event_index": 2,
+            "holdout_dataset_id": "T",
+            metric: 0.9,
+        },
+        {
+            "stage": 2,
+            "event": "post_adapt",
+            "event_index": 3,
+            "holdout_dataset_id": "T",
+            metric: 0.6,
+        },
+        {
+            "stage": 2,
+            "event": "final",
+            "event_index": 4,
+            "holdout_dataset_id": "U",
+            metric: 0.7,
+        },
+        {
+            "stage": 2,
+            "event": "final",
+            "event_index": 4,
+            "holdout_dataset_id": "T",
+            metric: 0.5,
+        },
+    ]
+    forgetting = final_forgetting(rows, ("U", "T"))
+    target = next(row for row in forgetting if row["domain_id"] == "T" and row["metric"] == metric)
+    assert target["maximum_since_learned"] == pytest.approx(0.6)
+    assert target["forgetting"] == pytest.approx(0.1)
 
 
 def test_backward_transfer_uses_learned_state_and_reports_mean() -> None:

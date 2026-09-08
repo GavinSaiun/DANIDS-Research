@@ -17,7 +17,13 @@ import yaml
 
 from danids.config.continual import ContinualMethod, load_continual_experiment_config
 from danids.continual.initial_state import file_sha256
-from danids.continual.supervision import SupervisionSchedule
+from danids.continual.metrics import (
+    adaptation_gains,
+    backward_transfer,
+    final_forgetting,
+    stage_seen_domain_metrics,
+)
+from danids.continual.supervision import SupervisionSchedule, row_positions_digest
 from danids.data.materialized import MATERIALIZER_VERSION
 from danids.evaluation.study1 import CANONICAL_DOMAINS, validate_static_study1_run
 
@@ -150,18 +156,92 @@ def _static_reference(path: str | Path) -> StaticReference:
     )
 
 
+def _partition_range(provenance: Mapping[str, Any], domain: str, partition: str) -> tuple[int, int]:
+    ranges = provenance.get("manifest_partition_ranges")
+    domain_ranges = ranges.get(domain) if isinstance(ranges, dict) else None
+    value = domain_ranges.get(partition) if isinstance(domain_ranges, dict) else None
+    if not isinstance(value, dict):
+        raise Study2AggregationError(
+            f"adaptive provenance lacks {domain} {partition} partition range"
+        )
+    start = _int(value.get("start"), f"{domain} {partition} start")
+    stop = _int(value.get("stop"), f"{domain} {partition} stop")
+    if start < 0 or stop <= start:
+        raise Study2AggregationError(f"adaptive provenance has invalid {domain} {partition} range")
+    return start, stop
+
+
+def _positions_within_partition(
+    positions: Sequence[int], domain: str, partition: str, provenance: Mapping[str, Any]
+) -> bool:
+    start, stop = _partition_range(provenance, domain, partition)
+    return all(start <= position < stop for position in positions)
+
+
 def _positions_outside_holdouts(
     positions: Sequence[int], domain: str, provenance: Mapping[str, Any]
 ) -> bool:
-    ranges = provenance.get("manifest_holdout_ranges")
-    if not isinstance(ranges, dict) or not isinstance(ranges.get(domain), dict):
-        raise Study2AggregationError("adaptive provenance lacks permanent-holdout ranges")
-    start = _int(ranges[domain].get("start"), "holdout start")
-    stop = _int(ranges[domain].get("stop"), "holdout stop")
+    start, stop = _partition_range(provenance, domain, "permanent_holdout")
     return all(not (start <= position < stop) for position in positions)
 
 
-def _validate_memory(root: Path, method: ContinualMethod, provenance: Mapping[str, Any]) -> None:
+def _validate_partition_provenance(
+    provenance: Mapping[str, Any], sequence: tuple[str, ...]
+) -> None:
+    ranges = provenance.get("manifest_partition_ranges")
+    if not isinstance(ranges, dict) or set(ranges) != set(CANONICAL_DOMAINS):
+        raise Study2AggregationError(
+            "adaptive provenance must contain all U/T/C/B partition ranges"
+        )
+    for index, domain in enumerate(sequence):
+        raw = ranges.get(domain)
+        if not isinstance(raw, dict) or set(raw) != {
+            "initial_train",
+            "validation",
+            "online_stream",
+            "permanent_holdout",
+        }:
+            raise Study2AggregationError(
+                f"adaptive provenance partition schema differs for {domain}"
+            )
+        holdout_start, row_count = _partition_range(provenance, domain, "permanent_holdout")
+        if index == 0:
+            train_start, train_stop = _partition_range(provenance, domain, "initial_train")
+            validation_start, validation_stop = _partition_range(provenance, domain, "validation")
+            if raw.get("online_stream") is not None:
+                raise Study2AggregationError(f"source domain {domain} declares an online stream")
+            if (
+                train_start != 0
+                or train_stop != validation_start
+                or validation_stop != holdout_start
+                or train_stop != int(row_count * 0.60)
+                or validation_stop != int(row_count * 0.80)
+            ):
+                raise Study2AggregationError(
+                    f"source domain {domain} partitions are not contiguous"
+                )
+        else:
+            online_start, online_stop = _partition_range(provenance, domain, "online_stream")
+            if raw.get("initial_train") is not None or raw.get("validation") is not None:
+                raise Study2AggregationError(f"later domain {domain} declares source partitions")
+            if (
+                online_start != 0
+                or online_stop != holdout_start
+                or online_stop != int(row_count * 0.80)
+            ):
+                raise Study2AggregationError(f"later domain {domain} partitions are not contiguous")
+
+
+def _validate_memory(
+    root: Path,
+    method: ContinualMethod,
+    provenance: Mapping[str, Any],
+    schedule: SupervisionSchedule,
+    sequence: tuple[str, ...],
+) -> None:
+    expected_later = {
+        entry.dataset_id: tuple(entry.chronological_positions) for entry in schedule.entries
+    }
     state = _load_json(root / "memory_state_summary.json")
     if state.get("audit_per_domain") != 0:
         raise Study2AggregationError(f"{root}: audit memory is forbidden in TASK-004")
@@ -181,13 +261,28 @@ def _validate_memory(root: Path, method: ContinualMethod, provenance: Mapping[st
         consolidations = checkpoint.get("consolidations") if isinstance(checkpoint, dict) else None
         if not isinstance(consolidations, list) or len(consolidations) != 4:
             raise Study2AggregationError(f"{root}: EWC Fisher checkpoint is incomplete")
-        for index, item in enumerate(consolidations):
+        by_domain: dict[str, list[int]] = {}
+        for item in consolidations:
             if not isinstance(item, dict) or not isinstance(item.get("row_positions"), list):
                 raise Study2AggregationError(f"{root}: EWC Fisher provenance is invalid")
             positions = [_int(value, "Fisher position") for value in item["row_positions"]]
             domain = str(item.get("domain_id"))
-            valid_count = 0 < len(positions) <= 400 if index == 0 else len(positions) == 100
-            if not valid_count or not _positions_outside_holdouts(positions, domain, provenance):
+            if domain in by_domain or len(positions) != len(set(positions)):
+                raise Study2AggregationError(f"{root}: EWC Fisher domain/positions are duplicated")
+            by_domain[domain] = positions
+        if set(by_domain) != set(sequence):
+            raise Study2AggregationError(f"{root}: EWC Fisher domains differ from the sequence")
+        for index, domain in enumerate(sequence):
+            positions = by_domain[domain]
+            if index == 0:
+                valid = 0 < len(positions) <= 400 and _positions_within_partition(
+                    positions, domain, "initial_train", provenance
+                )
+            else:
+                valid = tuple(sorted(positions)) == expected_later[domain] and (
+                    _positions_within_partition(positions, domain, "online_stream", provenance)
+                )
+            if not valid or not _positions_outside_holdouts(positions, domain, provenance):
                 raise Study2AggregationError(f"{root}: EWC Fisher used disallowed rows")
     if method in {"er", "ft_mem"}:
         if not isinstance(final_memory, dict):
@@ -203,6 +298,7 @@ def _validate_memory(root: Path, method: ContinualMethod, provenance: Mapping[st
         if not isinstance(domains, list) or len(domains) != 4:
             raise Study2AggregationError(f"{root}: final replay memory must cover four domains")
         expected_selection = "uniform_random" if method == "er" else "embedding_mean_herding"
+        by_domain = {}
         for item in domains:
             if not isinstance(item, dict) or item.get("selection") != expected_selection:
                 raise Study2AggregationError(f"{root}: method-specific memory policy differs")
@@ -212,9 +308,27 @@ def _validate_memory(root: Path, method: ContinualMethod, provenance: Mapping[st
                 raise Study2AggregationError(f"{root}: per-domain memory cap exceeded")
             memory_positions = item.get("row_positions")
             domain = str(item.get("domain_id"))
-            if not isinstance(memory_positions, list) or not _positions_outside_holdouts(
-                [_int(value, "memory position") for value in memory_positions], domain, provenance
+            if not isinstance(memory_positions, list) or domain in by_domain:
+                raise Study2AggregationError(f"{root}: replay memory provenance is invalid")
+            positions = [_int(value, "memory position") for value in memory_positions]
+            if len(positions) != len(set(positions)) or len(positions) != _int(
+                item.get("size"), "domain memory size"
             ):
+                raise Study2AggregationError(f"{root}: replay memory positions are inconsistent")
+            by_domain[domain] = positions
+        if set(by_domain) != set(sequence):
+            raise Study2AggregationError(f"{root}: replay memory domains differ from sequence")
+        for index, domain in enumerate(sequence):
+            positions = by_domain[domain]
+            if index == 0:
+                valid = 0 < len(positions) <= 400 and _positions_within_partition(
+                    positions, domain, "initial_train", provenance
+                )
+            else:
+                valid = tuple(sorted(positions)) == expected_later[domain] and (
+                    _positions_within_partition(positions, domain, "online_stream", provenance)
+                )
+            if not valid or not _positions_outside_holdouts(positions, domain, provenance):
                 raise Study2AggregationError(f"{root}: permanent-holdout position entered memory")
 
 
@@ -237,6 +351,42 @@ def _scientific_signature(config: Mapping[str, Any], provenance: Mapping[str, An
     return json.dumps(signature, sort_keys=True, separators=(",", ":"))
 
 
+def _validate_derived_rows(
+    path: Path,
+    persisted: Sequence[Mapping[str, str]],
+    expected: Sequence[Mapping[str, Any]],
+) -> None:
+    if len(persisted) != len(expected):
+        raise Study2AggregationError(
+            f"{path}: derived metric row count differs from holdout recomputation"
+        )
+    for row_index, (actual, recomputed) in enumerate(zip(persisted, expected, strict=True)):
+        for key, expected_value in recomputed.items():
+            actual_value = actual.get(key)
+            differs = False
+            if expected_value is None:
+                differs = actual_value not in {None, ""}
+            elif isinstance(expected_value, float):
+                try:
+                    parsed = float(str(actual_value))
+                except (TypeError, ValueError):
+                    differs = True
+                else:
+                    differs = not math.isclose(parsed, expected_value, rel_tol=1e-12, abs_tol=1e-12)
+            elif isinstance(expected_value, int):
+                try:
+                    differs = int(str(actual_value)) != expected_value
+                except (TypeError, ValueError):
+                    differs = True
+            else:
+                differs = str(actual_value) != str(expected_value)
+            if differs:
+                raise Study2AggregationError(
+                    f"{path}: derived metric differs from holdout recomputation "
+                    f"at row {row_index + 1}, field {key}"
+                )
+
+
 def validate_continual_run(path: str | Path, static: StaticReference) -> AdaptiveArtifacts:
     root = Path(path).resolve()
     missing = [name for name in REQUIRED_ADAPTIVE_FILES if not (root / name).is_file()]
@@ -255,6 +405,7 @@ def validate_continual_run(path: str | Path, static: StaticReference) -> Adaptiv
     sequence = parsed.experiment.sequence
     if seed != static.seed or sequence != static.sequence:
         raise Study2AggregationError(f"{root}: seed/sequence differs from paired static run")
+    _validate_partition_provenance(provenance, sequence)
     if summary.get("method") != method or summary.get("sequence") != list(sequence):
         raise Study2AggregationError(f"{root}: summary method/sequence differs from config")
     if _int(summary.get("adaptation_count"), "adaptation count") != 3:
@@ -295,18 +446,25 @@ def validate_continual_run(path: str | Path, static: StaticReference) -> Adaptiv
     if schedule.seed != seed or schedule.sequence != sequence:
         raise Study2AggregationError(f"{root}: supervision schedule seed/sequence differs")
     for entry in schedule.entries:
-        if not _positions_outside_holdouts(
+        if not _positions_within_partition(
+            entry.chronological_positions, entry.dataset_id, "online_stream", provenance
+        ) or not _positions_outside_holdouts(
             entry.chronological_positions, entry.dataset_id, provenance
         ):
-            raise Study2AggregationError(f"{root}: supervision selected permanent holdout rows")
+            raise Study2AggregationError(
+                f"{root}: supervision positions fall outside the allowed online stream"
+            )
     schedule_digest = schedule.digest()
     if provenance.get("supervision_schedule_digest") != schedule_digest:
         raise Study2AggregationError(f"{root}: supervision schedule digest differs")
-    _validate_memory(root, method, provenance)
+    _validate_memory(root, method, provenance, schedule, sequence)
 
     adaptations = _read_csv(root / "adaptation_log.csv")
     if len(adaptations) != 3:
         raise Study2AggregationError(f"{root}: adaptation log must contain three rows")
+    adaptations_by_stage = {row.get("stage"): row for row in adaptations}
+    if set(adaptations_by_stage) != {"2", "3", "4"}:
+        raise Study2AggregationError(f"{root}: adaptation stages must be exactly 2/3/4")
     for row in adaptations:
         if _int(row.get("queried_labels_available"), "queried labels") != 100:
             raise Study2AggregationError(f"{root}: adaptation did not receive exactly 100 labels")
@@ -316,6 +474,15 @@ def validate_continual_run(path: str | Path, static: StaticReference) -> Adaptiv
             raise Study2AggregationError(f"{root}: adaptation changed preprocessor")
         if row.get("threshold_digest") != static.threshold_digest:
             raise Study2AggregationError(f"{root}: adaptation changed threshold")
+        stage = _int(row.get("stage"), "adaptation stage")
+        entry = schedule.entries[stage - 2]
+        if row.get("domain_id") != entry.dataset_id:
+            raise Study2AggregationError(f"{root}: adaptation domain differs from schedule")
+        expected_target_digest = row_positions_digest(entry.chronological_positions)
+        if row.get("target_row_positions_sha256") != expected_target_digest:
+            raise Study2AggregationError(
+                f"{root}: actual adaptation rows differ from the supervision schedule"
+            )
         replay_rows = _int(row.get("replay_rows_available"), "available replay rows")
         rows_processed = _int(row.get("rows_processed"), "processed adaptation rows")
         optimizer_steps = _int(row.get("optimizer_steps"), "adaptation optimizer steps")
@@ -372,10 +539,37 @@ def validate_continual_run(path: str | Path, static: StaticReference) -> Adaptiv
         CANONICAL_DOMAINS
     ):
         raise Study2AggregationError(f"{root}: final event must contain all four holdouts")
+    final_event_indices = {_int(row.get("event_index"), "final event index") for row in final}
+    domain_end_indices = {
+        _int(row.get("event_index"), "domain-end event index")
+        for row in holdouts
+        if row.get("event") == "domain_end"
+    }
+    if (
+        len(final_event_indices) != 1
+        or not domain_end_indices
+        or next(iter(final_event_indices)) <= max(domain_end_indices)
+    ):
+        raise Study2AggregationError(f"{root}: final holdout event is out of order")
     native = _read_csv(root / "native_attack_metrics.csv")
     final_native = tuple(row for row in native if row.get("event") == "final")
     if not final_native:
         raise Study2AggregationError(f"{root}: final native attack metrics are missing")
+    expected_gains = adaptation_gains(holdouts)
+    expected_forgetting = final_forgetting(holdouts, sequence)
+    expected_bwt = backward_transfer(holdouts, sequence)
+    expected_stage_metrics = stage_seen_domain_metrics(holdouts, sequence)
+    gains = _read_csv(root / "adaptation_gain.csv")
+    forgetting = _read_csv(root / "forgetting.csv")
+    bwt = _read_csv(root / "bwt.csv")
+    _validate_derived_rows(root / "adaptation_gain.csv", gains, expected_gains)
+    _validate_derived_rows(root / "forgetting.csv", forgetting, expected_forgetting)
+    _validate_derived_rows(root / "bwt.csv", bwt, expected_bwt)
+    _validate_derived_rows(
+        root / "stage_metrics.csv",
+        _read_csv(root / "stage_metrics.csv"),
+        expected_stage_metrics,
+    )
     return AdaptiveArtifacts(
         path=root,
         method=method,
@@ -386,9 +580,9 @@ def validate_continual_run(path: str | Path, static: StaticReference) -> Adaptiv
         fingerprints=fingerprints,
         final_holdouts=final,
         final_native=final_native,
-        gains=tuple(_read_csv(root / "adaptation_gain.csv")),
-        forgetting=tuple(_read_csv(root / "forgetting.csv")),
-        bwt=tuple(_read_csv(root / "bwt.csv")),
+        gains=tuple(gains),
+        forgetting=tuple(forgetting),
+        bwt=tuple(bwt),
         resource=_load_json(root / "resource_metrics.json"),
         scientific_signature=_scientific_signature(config, provenance),
     )

@@ -60,11 +60,28 @@ def final_forgetting(
     final_rows = {str(row["holdout_dataset_id"]): row for row in rows if row["event"] == "final"}
     result: list[dict[str, Any]] = []
     for learned_stage, domain in enumerate(sequence, start=1):
-        eligible = [
-            row
-            for row in rows
-            if str(row["holdout_dataset_id"]) == domain and int(row["stage"]) >= learned_stage
-        ]
+        learned_event = "source_initial" if learned_stage == 1 else "post_adapt"
+        learned_row_index, learned = next(
+            (index, row)
+            for index, row in enumerate(rows)
+            if str(row["holdout_dataset_id"]) == domain
+            and int(row["stage"]) == learned_stage
+            and row["event"] == learned_event
+        )
+        learned_event_index = learned.get("event_index")
+        if learned_event_index is None or learned_event_index == "":
+            eligible = [
+                row for row in rows[learned_row_index:] if str(row["holdout_dataset_id"]) == domain
+            ]
+        else:
+            learned_order = int(learned_event_index)
+            eligible = [
+                row
+                for row in rows
+                if str(row["holdout_dataset_id"]) == domain
+                and row.get("event_index") not in {None, ""}
+                and int(row["event_index"]) >= learned_order
+            ]
         final = final_rows[domain]
         for metric in CONTINUAL_METRICS:
             values = [value for row in eligible if (value := _value(row, metric)) is not None]

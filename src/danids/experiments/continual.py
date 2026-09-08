@@ -46,6 +46,7 @@ from danids.continual.metrics import (
 from danids.continual.supervision import (
     DelayedLabelQueue,
     load_or_create_supervision_schedule,
+    row_positions_digest,
 )
 from danids.data.materialized import (
     MATERIALIZER_VERSION,
@@ -461,6 +462,7 @@ def run_continual_experiment(
                         "stage": stage,
                         "domain_id": dataset_id,
                         "queried_labels_available": len(released),
+                        "target_row_positions_sha256": row_positions_digest(released.row_positions),
                         **result.to_dict(),
                         "memory_examples_after": 0 if memory is None else memory.total_size,
                         "memory_bytes_after": 0 if memory is None else memory.nbytes,
@@ -567,10 +569,21 @@ def run_continual_experiment(
         "seed": config.experiment.seed,
         "sequence": list(config.experiment.sequence),
         "dataset_fingerprints": dict(initial.dataset_fingerprints),
-        "manifest_holdout_ranges": {
+        "manifest_partition_ranges": {
             item.dataset_id: {
-                "start": item.permanent_holdout.start,
-                "stop": item.permanent_holdout.stop,
+                "initial_train": None
+                if item.initial_train is None
+                else {"start": item.initial_train.start, "stop": item.initial_train.stop},
+                "validation": None
+                if item.validation is None
+                else {"start": item.validation.start, "stop": item.validation.stop},
+                "online_stream": None
+                if item.online_stream is None
+                else {"start": item.online_stream.start, "stop": item.online_stream.stop},
+                "permanent_holdout": {
+                    "start": item.permanent_holdout.start,
+                    "stop": item.permanent_holdout.stop,
+                },
             }
             for item in manifests
         },
