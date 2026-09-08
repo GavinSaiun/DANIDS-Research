@@ -20,5 +20,8 @@ configs/datasets.local.yaml
 /runs/
 /results/
 /study1/
+/study2/
+/schedules/
 /checkpoints/
 /materialized/
+/.task004-test-tmp*/

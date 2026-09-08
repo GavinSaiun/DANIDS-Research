@@ -144,10 +144,15 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
-**TASK-003 — Study 1 static transfer matrix.** The package now includes the
-four frozen source rotations, seed/role-safe manifest reuse, and strict
-artifact-only aggregation for directional transfer, prevalence-aware metrics,
-native attack recall, reproducibility summaries, and signed asymmetry. See
+**TASK-004 — Study 2 continual baselines.** The package now imports an exact
+reviewed Study-1 deployment state and provides deterministic delayed
+supervision, predict-first continual execution, NaiveFT, diagonal EWC,
+Experience Replay, FT-Mem, continual/resource metrics, and strict artifact-only
+aggregation. See
+[`docs/study2_continual_baselines.md`](docs/study2_continual_baselines.md).
+
+The preceding TASK-003 infrastructure provides four frozen source rotations,
+seed/role-safe manifest reuse, and strict Study-1 artifact aggregation. See
 [`docs/study1_static_transfer_matrix.md`](docs/study1_static_transfer_matrix.md).
 
 The underlying TASK-002 baseline provides the disk-backed chronological
@@ -155,5 +160,4 @@ materialisation path, initial-training-only numeric
 preprocessing, the frozen source-trained MLP, validation-only checkpoint and
 threshold selection, prequential target evaluation, and reconstructible
 metrics/checkpoint outputs. See
-[`docs/static_mlp_baseline.md`](docs/static_mlp_baseline.md). Continual learning
-and target adaptation remain later tasks.
+[`docs/static_mlp_baseline.md`](docs/static_mlp_baseline.md).
