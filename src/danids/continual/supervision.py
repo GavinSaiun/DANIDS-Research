@@ -36,6 +36,42 @@ def row_positions_digest(positions: Sequence[int] | np.ndarray[Any, Any]) -> str
     return hashlib.sha256(payload).hexdigest()
 
 
+def deterministic_query_positions(
+    *,
+    first_start: int,
+    first_stop: int,
+    seed: int,
+    stage: int,
+    dataset_id: str,
+    source_sha256: str,
+    query_count: int = 100,
+) -> tuple[int, ...]:
+    """Reconstruct the frozen label-blind first-window query positions."""
+
+    if first_start < 0 or first_stop - first_start < query_count or query_count != 100:
+        raise ValueError("TASK-004 first window must contain the exact 100-label budget")
+    identity = json.dumps(
+        {
+            "version": SUPERVISION_SCHEDULE_VERSION,
+            "seed": seed,
+            "stage": stage,
+            "dataset_id": dataset_id,
+            "source_sha256": source_sha256,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    derived_seed = int.from_bytes(hashlib.sha256(identity).digest()[:8], "little")
+    rng = np.random.default_rng(derived_seed)
+    return tuple(
+        sorted(
+            int(value)
+            for value in rng.choice(first_stop - first_start, query_count, replace=False)
+            + first_start
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SupervisionEntry:
     stage: int
@@ -169,25 +205,14 @@ def generate_supervision_schedule(
         first_stop = min(first_start + 50_000, manifest.online_stream.stop)
         if first_stop - first_start < query_count:
             raise ValueError("later domain first window contains fewer than 100 flows")
-        identity = json.dumps(
-            {
-                "version": SUPERVISION_SCHEDULE_VERSION,
-                "seed": seed,
-                "stage": stage,
-                "dataset_id": manifest.dataset_id,
-                "source_sha256": manifest.source.sha256,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-        derived_seed = int.from_bytes(hashlib.sha256(identity).digest()[:8], "little")
-        rng = np.random.default_rng(derived_seed)
-        positions = tuple(
-            sorted(
-                int(value)
-                for value in rng.choice(first_stop - first_start, query_count, replace=False)
-                + first_start
-            )
+        positions = deterministic_query_positions(
+            first_start=first_start,
+            first_stop=first_stop,
+            seed=seed,
+            stage=stage,
+            dataset_id=manifest.dataset_id,
+            source_sha256=manifest.source.sha256,
+            query_count=query_count,
         )
         entries.append(
             SupervisionEntry(
@@ -276,6 +301,7 @@ __all__ = [
     "DelayedLabelQueue",
     "SupervisionEntry",
     "SupervisionSchedule",
+    "deterministic_query_positions",
     "generate_supervision_schedule",
     "load_or_create_supervision_schedule",
     "row_positions_digest",

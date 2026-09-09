@@ -158,6 +158,20 @@ This file records methodological decisions that should not silently change after
 
 **Reason:** The thesis may be experimentally deep without becoming narratively fragmented.
 
+## D027 — Operational versus representational retention
+
+**Date:** 2026-09-09
+
+**Old rule:** Continual retention was primarily summarised with threshold-free discrimination and conventional forgetting/BWT metrics, with operational FPR metrics reported alongside them.
+
+**New rule:** DANIDS will explicitly distinguish **representational retention** (for example PR-AUC, ROC-AUC and threat-level competence) from **operational retention** at the frozen deployment operating point (for example FPR, FPR-budget ratio, threshold-transfer ratio and operating-envelope compliance). Existing Study-2 calculations remain unchanged; the distinction is a reporting and subsequent-methodology clarification rather than a retroactive metric rewrite.
+
+**Reason:** After Study-2 results were observed, seeds 42–44 showed that previous-domain ROC/PR performance could remain nearly unchanged while frozen-threshold false-positive rates increased by orders of magnitude. Treating those outcomes as equivalent would obscure a deployment-relevant form of forgetting.
+
+**Status:** Exploratory clarification motivated by observed Study-2 results; frozen prospectively for Study 3 onward.
+
+**Affected experiments:** Study 3 and later DANIDS health/policy studies. Study 1/2 results are not recomputed or redefined.
+
 ---
 
 ## Template for future decisions

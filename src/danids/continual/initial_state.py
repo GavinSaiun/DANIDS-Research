@@ -6,13 +6,13 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import torch
 import yaml
 from torch import Tensor
 
-from danids.config.continual import ContinualExperimentConfig
+from danids.config.experiment import ExperimentConfig
 from danids.data.manifests import SplitManifest
 from danids.data.materialized import MATERIALIZER_VERSION
 from danids.data.preprocessing import PREPROCESSOR_VERSION, NumericPreprocessor
@@ -49,6 +49,11 @@ class ImportedInitialState:
     source_provenance: dict[str, Any]
 
 
+class InitialStateConfig(Protocol):
+    @property
+    def experiment(self) -> ExperimentConfig: ...
+
+
 def _load_threshold(path: Path) -> ThresholdSelection:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -70,7 +75,7 @@ def _load_threshold(path: Path) -> ThresholdSelection:
 
 def load_study1_initial_state(
     run_dir: str | Path,
-    config: ContinualExperimentConfig,
+    config: InitialStateConfig,
     contract: FeatureContract,
     manifests: tuple[SplitManifest, ...],
 ) -> ImportedInitialState:

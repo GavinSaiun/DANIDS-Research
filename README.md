@@ -144,6 +144,13 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
+**TASK-005 — Study 3 model health.** The package now extracts leakage-safe
+window health signals from exact frozen Study-1 states, assigns Wilson-supported
+SAFE/UNCERTAIN/HARMFUL evaluator labels, supports delayed-label health features,
+and evaluates interpretable and nonlinear predictors with domain-out and
+transition-out folds. See
+[`docs/study3_model_health.md`](docs/study3_model_health.md).
+
 **TASK-004 — Study 2 continual baselines.** The package now imports an exact
 reviewed Study-1 deployment state and provides deterministic delayed
 supervision, predict-first continual execution, NaiveFT, diagonal EWC,

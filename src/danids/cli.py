@@ -11,6 +11,7 @@ from typing import Any
 
 from danids.config.continual import load_continual_experiment_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
+from danids.config.health import load_health_experiment_config
 from danids.config.static import load_static_experiment_config
 from danids.continual.supervision import load_or_create_supervision_schedule
 from danids.data.manifests import SplitManifest, generate_split_manifest
@@ -18,7 +19,9 @@ from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
+from danids.evaluation.study3 import evaluate_health_study3
 from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
+from danids.experiments.health import HealthSmokeLimits, run_health_experiment
 from danids.experiments.static import (
     SmokeLimits,
     load_or_generate_static_manifests,
@@ -212,6 +215,36 @@ def _aggregate_continual_study2(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_health_study3(args: argparse.Namespace) -> int:
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_health_experiment_config(args.experiment_config).with_runtime_seed(args.seed)
+    smoke = None
+    if args.smoke:
+        smoke = HealthSmokeLimits(
+            source_control_windows=args.smoke_source_control_windows,
+            later_stages=args.smoke_later_stages,
+            later_windows=args.smoke_later_windows,
+        )
+    output = run_health_experiment(
+        registry,
+        config,
+        initial_run=args.initial_run,
+        manifest_dir=args.manifest_dir,
+        output_root=args.output_dir,
+        device_name=args.device,
+        smoke=smoke,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
+    return 0
+
+
+def _evaluate_health_study3(args: argparse.Namespace) -> int:
+    output = evaluate_health_study3(args.run_dirs, args.output_dir)
+    summary = json.loads((output / "study3_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -301,6 +334,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     aggregate_continual.add_argument("--output-dir", required=True, type=Path)
     aggregate_continual.set_defaults(handler=_aggregate_continual_study2)
+
+    run_health = subparsers.add_parser(
+        "run-health-study3", help="extract one frozen-model TASK-005 health episode"
+    )
+    run_health.add_argument("--datasets-config", required=True, type=Path)
+    run_health.add_argument("--experiment-config", required=True, type=Path)
+    run_health.add_argument("--initial-run", type=Path)
+    run_health.add_argument("--manifest-dir", required=True, type=Path)
+    run_health.add_argument("--output-dir", required=True, type=Path)
+    run_health.add_argument("--device", default="auto")
+    run_health.add_argument("--seed", type=int)
+    run_health.add_argument("--smoke", action="store_true")
+    run_health.add_argument("--smoke-source-control-windows", type=int, default=2)
+    run_health.add_argument("--smoke-later-stages", type=int, default=1)
+    run_health.add_argument("--smoke-later-windows", type=int, default=3)
+    run_health.set_defaults(handler=_run_health_study3)
+
+    evaluate_health = subparsers.add_parser(
+        "evaluate-health-study3", help="artifact-only grouped Study-3 health evaluation"
+    )
+    evaluate_health.add_argument(
+        "--run-dir", dest="run_dirs", required=True, action="append", type=Path
+    )
+    evaluate_health.add_argument("--output-dir", required=True, type=Path)
+    evaluate_health.set_defaults(handler=_evaluate_health_study3)
     return parser
 
 
