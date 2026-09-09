@@ -169,6 +169,8 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "materializer_version": MATERIALIZER_VERSION,
         "preprocessor_version": PREPROCESSOR_VERSION,
         "reference_positions_digest": positions_digest(reference),
+        "seed": 42,
+        "sequence": ["U", "T", "C", "B"],
         "source_artifact_kind": "study1_static",
         "source_checkpoint_sha256": "checkpoint-sha",
         "source_model_digest": "model",
@@ -244,7 +246,8 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                     else None,
                 }
             )
-    pd.DataFrame(rows).to_csv(run / "health_windows.csv", index=False)
+    windows = pd.DataFrame(rows)
+    windows.to_csv(run / "health_windows.csv", index=False)
     pd.DataFrame([{"feature_name": "F1", "wasserstein": 0.0}]).to_csv(
         run / "distribution_feature_long.csv", index=False
     )
@@ -254,8 +257,16 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (run / "health_run_summary.json").write_text(
         json.dumps(
             {
+                "status": "complete",
                 "smoke": True,
                 "health_window_count": len(rows),
+                "source_domain": "U",
+                "sequence": ["U", "T", "C", "B"],
+                "seed": 42,
+                "state_counts": {
+                    state: int((windows["health_state"] == state).sum())
+                    for state in ("SAFE", "UNCERTAIN", "HARMFUL")
+                },
             }
         ),
         encoding="utf-8",
@@ -329,4 +340,16 @@ def test_delayed_positions_differing_from_schedule_are_rejected(
     frame.loc[target, "delayed_positions_digest"] = row_positions_digest(range(1, 101))
     frame.to_csv(run / "health_windows.csv", index=False)
     with pytest.raises(ValueError, match="positions differ from schedule"):
+        validate_health_run(run, allow_smoke=True)
+
+
+def test_corrupted_health_run_summary_state_counts_are_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _health_run(tmp_path, monkeypatch)
+    path = run / "health_run_summary.json"
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    summary["state_counts"]["SAFE"] += 1
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    with pytest.raises(ValueError, match="summary state counts differ"):
         validate_health_run(run, allow_smoke=True)

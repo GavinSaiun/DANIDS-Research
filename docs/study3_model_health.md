@@ -67,6 +67,8 @@ Primary folds leave out every window and seed for one current domain. Secondary 
 out one directional cross-domain transition. There is no random window split. Outputs include
 AUPRC/AUROC, fixed-0.5 classification and calibration metrics, domain/transition summaries,
 training-fold-defined shift/harm discordance, and contiguous-harm detection delay.
+`study3_detection_delay.csv` uses the primary leave-current-domain-out
+`combined_unlabelled` logistic health predictor at its fixed 0.5 probability threshold.
 
 ## Commands
 
@@ -95,7 +97,9 @@ danids evaluate-health-study3 `
 The evaluator reads no raw flows. It rejects smoke inputs, duplicated source identities, mixed
 scientific/data contracts, source-state mismatches, holdout contact, schedule/timing violations,
 changed model state, missing windows, and outer-fold leakage. It deterministically recomputes
-all derived CSVs from `study3_health_dataset.csv` when validating an evaluation directory.
+all derived CSVs from `study3_health_dataset.csv` when validating an evaluation directory. The
+evaluation contract records each source identity, path, frozen rotation and seed so completion
+status and source-run/rotation metadata are independently reconstructed rather than trusted.
 
 ## Artifacts
 

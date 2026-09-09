@@ -138,6 +138,9 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
     summary = _load_json(root / "health_run_summary.json")
     reference_summary = _load_json(root / "reference_summary.json")
     smoke = bool(summary.get("smoke"))
+    configured_smoke = config.get("smoke") is not None
+    if smoke != configured_smoke:
+        raise ValueError(f"{root}: health run smoke metadata differs from resolved config")
     if smoke and not allow_smoke:
         raise ValueError(f"{root}: smoke health runs cannot enter confirmatory aggregation")
     if provenance.get("artifact_version") != HEALTH_ARTIFACT_VERSION:
@@ -423,6 +426,24 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
     expected_count = int(summary.get("health_window_count", -1))
     if expected_count != len(windows):
         raise ValueError(f"{root}: health window count differs from summary")
+    if summary.get("status") != "complete":
+        raise ValueError(f"{root}: health run summary is not complete")
+    if summary.get("source_domain") != source:
+        raise ValueError(f"{root}: health run summary source domain differs")
+    if summary.get("sequence") != list(sequence):
+        raise ValueError(f"{root}: health run summary sequence differs")
+    if int(summary.get("seed", -1)) != seed:
+        raise ValueError(f"{root}: health run summary seed differs")
+    expected_state_counts = {
+        state: int((windows["health_state"].astype(str) == state).sum())
+        for state in ("SAFE", "UNCERTAIN", "HARMFUL")
+    }
+    if dict(_mapping(summary.get("state_counts"), "health run state counts")) != (
+        expected_state_counts
+    ):
+        raise ValueError(f"{root}: health run summary state counts differ")
+    if int(provenance.get("seed", -1)) != seed or provenance.get("sequence") != list(sequence):
+        raise ValueError(f"{root}: health run provenance identity differs")
     source_identity = checkpoint_sha
     return ValidatedHealthRun(
         root,

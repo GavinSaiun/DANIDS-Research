@@ -8,12 +8,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import danids.evaluation.study3 as study3_module
 from danids.config.health import HealthPredictorConfig
 from danids.evaluation.study3 import (
     STUDY3_OUTPUT_VERSION,
     compute_study3_outputs,
+    evaluate_health_study3,
     validate_study3_evaluation,
 )
+from danids.health.artifacts import ValidatedHealthRun
+
+ROTATIONS = {
+    "U": ("U", "T", "C", "B"),
+    "T": ("T", "C", "B", "U"),
+    "C": ("C", "B", "U", "T"),
+    "B": ("B", "U", "T", "C"),
+}
 
 
 def health_meta_dataset() -> pd.DataFrame:
@@ -21,6 +31,9 @@ def health_meta_dataset() -> pd.DataFrame:
     domains = ("U", "T", "C", "B")
     states = ("SAFE", "HARMFUL", "UNCERTAIN")
     for source_index, source in enumerate(domains):
+        seed = 42 + source_index
+        source_run = f"synthetic-{source}"
+        source_identity = f"identity-{source}-{seed}"
         for current_index, current in enumerate(domains):
             for window in range(6):
                 state = states[window % 3]
@@ -28,9 +41,11 @@ def health_meta_dataset() -> pd.DataFrame:
                 rows.append(
                     {
                         "source_domain": source,
+                        "health_run": source_run,
+                        "source_run_identity": source_identity,
                         "current_domain": current,
                         "transition": f"{source}->{current}",
-                        "seed": 42 + source_index,
+                        "seed": seed,
                         "window_id": window,
                         "health_state": state,
                         "dist_wasserstein_mean": current_index + float(harmful),
@@ -53,16 +68,26 @@ def _write_evaluation(output: Path) -> None:
     derived = compute_study3_outputs(dataset, HealthPredictorConfig(), seed=42)
     for name, frame in derived.items():
         frame.to_csv(output / name, index=False)
+    records = [
+        {
+            "path": f"synthetic-{source}",
+            "source_identity": f"identity-{source}-{42 + index}",
+            "sequence": list(ROTATIONS[source]),
+            "seed": 42 + index,
+        }
+        for index, source in enumerate(("U", "T", "C", "B"))
+    ]
     (output / "evaluation_contract.json").write_text(
-        json.dumps({"version": STUDY3_OUTPUT_VERSION, "seed": 42}), encoding="utf-8"
+        json.dumps({"version": STUDY3_OUTPUT_VERSION, "seed": 42, "health_runs": records}),
+        encoding="utf-8",
     )
     counts = dataset["health_state"].value_counts().to_dict()
     summary = {
         "status": "incomplete",
         "artifact_only_evaluator": True,
-        "source_runs": ["synthetic-u", "synthetic-t", "synthetic-c", "synthetic-b"],
-        "seeds_present": [42, 43, 44, 45],
-        "rotations_present": ["synthetic"],
+        "source_runs": [record["path"] for record in records],
+        "seeds_present": sorted({record["seed"] for record in records}),
+        "rotations_present": sorted("-".join(value) for value in ROTATIONS.values()),
         "expected_domain_folds": ["U", "T", "C", "B"],
         "observed_domain_folds": ["B", "C", "T", "U"],
         "health_dataset_sha256": hashlib.sha256(
@@ -112,6 +137,49 @@ def test_persisted_metric_corruption_is_rejected(tmp_path: Path) -> None:
     frame.to_csv(path, index=False)
     with pytest.raises(ValueError, match="deterministic recomputation"):
         validate_study3_evaluation(output)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("status", "complete", "completion status"),
+        ("rotations_present", ["U-T-C-B"], "rotations"),
+        ("source_runs", ["wrong"], "source runs"),
+    ),
+)
+def test_corrupted_evaluation_summary_provenance_is_rejected(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    output = tmp_path / "evaluation"
+    _write_evaluation(output)
+    summary_path = output / "study3_summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary[field] = value
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        validate_study3_evaluation(output)
+
+
+def test_duplicate_rotation_seed_inputs_are_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sequence = ("U", "T", "C", "B")
+    windows = health_meta_dataset().iloc[:1].copy()
+    validated = {
+        "first": ValidatedHealthRun(
+            tmp_path / "first", 42, "U", sequence, "identity-1", "contract", windows
+        ),
+        "second": ValidatedHealthRun(
+            tmp_path / "second", 42, "U", sequence, "identity-2", "contract", windows
+        ),
+    }
+    monkeypatch.setattr(
+        study3_module,
+        "validate_health_run",
+        lambda path: validated[Path(path).name],
+    )
+    with pytest.raises(ValueError, match="duplicate rotation/seed"):
+        evaluate_health_study3([tmp_path / "first", tmp_path / "second"], tmp_path / "output")
 
 
 def test_study3_results_are_deterministic() -> None:

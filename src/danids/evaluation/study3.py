@@ -25,7 +25,7 @@ from danids.evaluation.study1 import FROZEN_ROTATIONS
 from danids.health.artifacts import validate_health_run
 from danids.health.predictors import build_grouped_folds, feature_columns, fit_fold_predictor
 
-STUDY3_OUTPUT_VERSION = "task005-study3-evaluator-v1"
+STUDY3_OUTPUT_VERSION = "task005-study3-evaluator-v2"
 OUTPUT_FILES = (
     "study3_health_dataset.csv",
     "study3_fold_metrics.csv",
@@ -39,6 +39,71 @@ OUTPUT_FILES = (
     "study3_detection_delay.csv",
     "study3_state_prevalence.csv",
 )
+
+
+def _expected_confirmatory_pairs() -> set[tuple[tuple[str, ...], int]]:
+    return {(rotation, seed) for rotation in FROZEN_ROTATIONS for seed in (42, 43, 44)}
+
+
+def _validated_contract_runs(contract: dict[str, Any], frame: pd.DataFrame) -> list[dict[str, Any]]:
+    """Validate minimal per-run provenance against the canonical aggregate dataset."""
+
+    raw_records = contract.get("health_runs")
+    if not isinstance(raw_records, list) or not raw_records:
+        raise ValueError("Study-3 evaluation contract lacks health-run provenance")
+    required_columns = {"health_run", "source_run_identity", "source_domain", "seed"}
+    if not required_columns.issubset(frame.columns):
+        raise ValueError("Study-3 health dataset lacks run-provenance columns")
+    records: list[dict[str, Any]] = []
+    identities: list[str] = []
+    pairs: list[tuple[tuple[str, ...], int]] = []
+    for raw in raw_records:
+        if not isinstance(raw, dict):
+            raise ValueError("Study-3 health-run provenance entry must be an object")
+        path = raw.get("path")
+        identity = raw.get("source_identity")
+        sequence_raw = raw.get("sequence")
+        seed_raw = raw.get("seed")
+        if not isinstance(path, str) or not path:
+            raise ValueError("Study-3 health-run provenance path is missing")
+        if not isinstance(identity, str) or not identity:
+            raise ValueError("Study-3 health-run source identity is missing")
+        if not isinstance(sequence_raw, list):
+            raise ValueError("Study-3 health-run sequence is missing")
+        sequence = tuple(str(value) for value in sequence_raw)
+        if sequence not in FROZEN_ROTATIONS:
+            raise ValueError("Study-3 health-run sequence is not a frozen rotation")
+        if not isinstance(seed_raw, int) or isinstance(seed_raw, bool):
+            raise ValueError("Study-3 health-run seed is invalid")
+        seed = seed_raw
+        matching = frame[frame["source_run_identity"].astype(str) == identity]
+        if matching.empty:
+            raise ValueError("Study-3 contract health run is absent from canonical dataset")
+        if set(matching["health_run"].astype(str)) != {path}:
+            raise ValueError("Study-3 contract source-run path differs from canonical dataset")
+        if set(matching["source_domain"].astype(str)) != {sequence[0]}:
+            raise ValueError("Study-3 contract source domain differs from canonical dataset")
+        if set(matching["seed"].astype(int)) != {seed}:
+            raise ValueError("Study-3 contract seed differs from canonical dataset")
+        identities.append(identity)
+        pairs.append((sequence, seed))
+        records.append(
+            {
+                "path": path,
+                "source_identity": identity,
+                "sequence": sequence,
+                "seed": seed,
+            }
+        )
+    if len(identities) != len(set(identities)):
+        raise ValueError("duplicate static source identities in Study-3 evaluation contract")
+    if len(pairs) != len(set(pairs)):
+        raise ValueError("duplicate rotation/seed pairs in Study-3 evaluation contract")
+    if set(frame["source_run_identity"].astype(str)) != set(identities):
+        raise ValueError("canonical health dataset contains unrecorded health runs")
+    if set(frame["health_run"].astype(str)) != {record["path"] for record in records}:
+        raise ValueError("canonical health dataset source runs differ from evaluation contract")
+    return records
 
 
 def _binary_metrics(
@@ -457,6 +522,11 @@ def validate_study3_evaluation(output_dir: str | Path) -> None:
         raise ValueError("Study-3 evaluation contract version differs")
     frame = pd.read_csv(root / "study3_health_dataset.csv")
     summary = json.loads((root / "study3_summary.json").read_text(encoding="utf-8"))
+    records = _validated_contract_runs(contract, frame)
+    observed_pairs = {(record["sequence"], record["seed"]) for record in records}
+    expected_status = (
+        "complete" if observed_pairs == _expected_confirmatory_pairs() else "incomplete"
+    )
     expected_hash = hashlib.sha256((root / "study3_health_dataset.csv").read_bytes()).hexdigest()
     if summary.get("artifact_only_evaluator") is not True:
         raise ValueError("Study-3 summary does not declare artifact-only evaluation")
@@ -472,12 +542,12 @@ def validate_study3_evaluation(output_dir: str | Path) -> None:
         raise ValueError("Study-3 summary feature sets differ")
     if summary.get("predictors") != ["logistic", "gradient_boosting"]:
         raise ValueError("Study-3 summary predictor set differs")
-    if summary.get("status") not in {"complete", "incomplete"}:
-        raise ValueError("Study-3 summary lacks a valid completion status")
-    source_runs = summary.get("source_runs")
-    if not isinstance(source_runs, list) or not source_runs:
-        raise ValueError("Study-3 summary lacks source-run identities")
-    expected_seeds = sorted(int(value) for value in frame["seed"].unique())
+    if summary.get("status") != expected_status:
+        raise ValueError("Study-3 summary completion status differs from run provenance")
+    expected_source_runs = [record["path"] for record in records]
+    if summary.get("source_runs") != expected_source_runs:
+        raise ValueError("Study-3 summary source runs differ from canonical provenance")
+    expected_seeds = sorted({record["seed"] for record in records})
     if summary.get("seeds_present") != expected_seeds:
         raise ValueError("Study-3 summary seeds differ from health dataset")
     if summary.get("expected_domain_folds") != ["U", "T", "C", "B"]:
@@ -485,9 +555,9 @@ def validate_study3_evaluation(output_dir: str | Path) -> None:
     observed_domains = sorted(frame["current_domain"].astype(str).unique())
     if summary.get("observed_domain_folds") != observed_domains:
         raise ValueError("Study-3 summary observed domain folds differ from health dataset")
-    rotations = summary.get("rotations_present")
-    if not isinstance(rotations, list) or not rotations:
-        raise ValueError("Study-3 summary lacks rotations present")
+    expected_rotations = sorted({"-".join(record["sequence"]) for record in records})
+    if summary.get("rotations_present") != expected_rotations:
+        raise ValueError("Study-3 summary rotations differ from canonical provenance")
     expected = compute_study3_outputs(frame, HealthPredictorConfig(), seed=int(contract["seed"]))
     for filename, expected_frame in expected.items():
         actual = pd.read_csv(root / filename)
@@ -502,6 +572,9 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     identities = [run.source_identity for run in validated]
     if len(identities) != len(set(identities)):
         raise ValueError("duplicate static source identities in Study-3 aggregation")
+    pairs = [(run.sequence, run.seed) for run in validated]
+    if len(pairs) != len(set(pairs)):
+        raise ValueError("duplicate rotation/seed inputs in Study-3 aggregation")
     if len({run.contract_digest for run in validated}) != 1:
         raise ValueError("Study-3 runs have mixed scientific/data contracts")
     feature_columns = [tuple(run.windows.columns) for run in validated]
@@ -510,7 +583,7 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     frames: list[pd.DataFrame] = []
     for run in validated:
         current = run.windows.copy()
-        current.insert(0, "health_run", run.path.name)
+        current.insert(0, "health_run", str(run.path))
         frames.append(current)
     dataset = pd.concat(frames, ignore_index=True)
     output = Path(output_dir)
@@ -521,7 +594,19 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     derived = compute_study3_outputs(dataset, HealthPredictorConfig(), seed=42)
     for filename, frame in derived.items():
         frame.to_csv(output / filename, index=False)
-    contract = {"version": STUDY3_OUTPUT_VERSION, "seed": 42}
+    contract = {
+        "version": STUDY3_OUTPUT_VERSION,
+        "seed": 42,
+        "health_runs": [
+            {
+                "path": str(run.path),
+                "source_identity": run.source_identity,
+                "sequence": list(run.sequence),
+                "seed": run.seed,
+            }
+            for run in validated
+        ],
+    }
     (output / "evaluation_contract.json").write_text(
         json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -529,8 +614,7 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     seeds = sorted({run.seed for run in validated})
     state_counts = dataset["health_state"].value_counts().to_dict()
     observed_pairs = {(run.sequence, run.seed) for run in validated}
-    expected_pairs = {(rotation, seed) for rotation in FROZEN_ROTATIONS for seed in (42, 43, 44)}
-    complete = observed_pairs == expected_pairs
+    complete = observed_pairs == _expected_confirmatory_pairs()
     summary = {
         "status": "complete" if complete else "incomplete",
         "artifact_only_evaluator": True,
