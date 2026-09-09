@@ -296,6 +296,7 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
         "current_domain",
         "transition",
         "seed",
+        "source_run_identity",
         "window_id",
         "row_start",
         "row_stop",
@@ -303,6 +304,12 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
         "health_state",
         "label_free_target_labels_used",
         "delayed_labels_available",
+        "delayed_attack_prevalence",
+        "delayed_attack_recall",
+        "delayed_benign_fpr",
+        "delayed_brier_score",
+        "delayed_sample_count",
+        "delayed_positions_digest",
         "model_digest_at_prediction",
     }
     missing_columns = required_columns.difference(windows.columns)
@@ -310,8 +317,36 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
         raise ValueError(f"{root}: invalid health_windows schema: {sorted(missing_columns)}")
     if windows.duplicated(["current_domain", "partition_kind", "window_id"]).any():
         raise ValueError(f"{root}: duplicated health windows")
+    observed_groups = {
+        (str(domain), str(partition))
+        for domain, partition in windows[["current_domain", "partition_kind"]].itertuples(
+            index=False, name=None
+        )
+    }
+    if not smoke:
+        expected_groups = {(source, "validation")} | {
+            (domain, "online_stream") for domain in sequence[1:]
+        }
+        if observed_groups != expected_groups:
+            missing_groups = sorted(expected_groups - observed_groups)
+            unexpected_groups = sorted(observed_groups - expected_groups)
+            raise ValueError(
+                f"{root}: non-smoke domain/partition coverage differs; "
+                f"missing={missing_groups}, unexpected={unexpected_groups}"
+            )
+    schedule_by_domain = {entry.dataset_id: entry for entry in schedule.entries}
     for row in windows.to_dict("records"):
+        if str(row["source_domain"]) != source:
+            raise ValueError(f"{root}: health-window source domain differs from config")
+        if int(row["seed"]) != seed:
+            raise ValueError(f"{root}: health-window seed differs from config")
         domain = str(row["current_domain"])
+        if domain not in sequence:
+            raise ValueError(f"{root}: health-window current domain is outside the sequence")
+        if str(row["transition"]) != f"{source}->{domain}":
+            raise ValueError(f"{root}: health-window transition differs from domain identity")
+        if str(row["source_run_identity"]) != checkpoint_sha:
+            raise ValueError(f"{root}: health-window source run identity differs")
         start, stop = int(row["row_start"]), int(row["row_stop"])
         hold_start, hold_stop = holdout_ranges[domain]
         if start < 0 or stop <= start or not (stop <= hold_start or start >= hold_stop):
@@ -372,7 +407,10 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
         for name, expected in expected_rates.items():
             if not _same_optional_float(row.get(name), expected):
                 raise ValueError(f"{root}: persisted {name} differs from confusion counts")
-        available = int(row["delayed_labels_available"])
+        available_raw = row["delayed_labels_available"]
+        if available_raw not in (0, 1):
+            raise ValueError(f"{root}: invalid delayed-label availability indicator")
+        available = int(available_raw)
         delayed_numeric = (
             "delayed_attack_prevalence",
             "delayed_attack_recall",
@@ -380,23 +418,44 @@ def validate_health_run(run_dir: str | Path, *, allow_smoke: bool = False) -> Va
             "delayed_brier_score",
             "delayed_sample_count",
         )
-        if available == 0 and any(pd.notna(row.get(name)) for name in delayed_numeric):
+        delayed_entry = schedule_by_domain.get(domain)
+        expected_available = (
+            delayed_entry is not None and int(row["window_id"]) > delayed_entry.label_return_window
+        )
+        if available != int(expected_available):
+            if available:
+                raise ValueError(f"{root}: delayed labels exposed before release")
+            raise ValueError(f"{root}: delayed labels unavailable after release")
+        if not expected_available and (
+            any(pd.notna(row.get(name)) for name in delayed_numeric)
+            or pd.notna(row.get("delayed_positions_digest"))
+        ):
             raise ValueError(f"{root}: delayed values are populated before label release")
         if str(row["model_digest_at_prediction"]) != str(frozen.get("model_before")):
             raise ValueError(f"{root}: health window was generated after model adaptation")
-        if available == 1:
-            delayed_entry = next(
-                (item for item in schedule.entries if item.dataset_id == domain), None
-            )
-            if delayed_entry is None or int(row["window_id"]) <= delayed_entry.label_return_window:
-                raise ValueError(f"{root}: delayed labels exposed before release")
+        if expected_available:
+            assert delayed_entry is not None
             expected = row_positions_digest(delayed_entry.chronological_positions)
             if str(row.get("delayed_positions_digest")) != expected:
                 raise ValueError(f"{root}: delayed-supervision positions differ from schedule")
+            required_finite = (
+                "delayed_attack_prevalence",
+                "delayed_brier_score",
+                "delayed_sample_count",
+            )
+            if any(not pd.notna(row.get(name)) for name in required_finite):
+                raise ValueError(f"{root}: released delayed-supervision fields are missing")
+            prevalence = float(row["delayed_attack_prevalence"])
+            if not math.isfinite(prevalence) or not 0.0 <= prevalence <= 1.0:
+                raise ValueError(f"{root}: delayed attack prevalence is invalid")
+            if not math.isfinite(float(row["delayed_brier_score"])):
+                raise ValueError(f"{root}: delayed Brier score is invalid")
+            if prevalence > 0.0 and not pd.notna(row.get("delayed_attack_recall")):
+                raise ValueError(f"{root}: released delayed attack recall is missing")
+            if prevalence < 1.0 and not pd.notna(row.get("delayed_benign_fpr")):
+                raise ValueError(f"{root}: released delayed benign FPR is missing")
             if int(row["delayed_sample_count"]) != 100:
                 raise ValueError(f"{root}: delayed supervision does not contain 100 rows")
-        elif available != 0:
-            raise ValueError(f"{root}: invalid delayed-label availability indicator")
     for (grouped_domain, partition), group in windows.groupby(
         ["current_domain", "partition_kind"], sort=True
     ):

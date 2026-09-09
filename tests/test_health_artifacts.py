@@ -27,7 +27,7 @@ from danids.health.states import classify_health
 from danids.shift.signals import deterministic_reference_positions, positions_digest
 
 
-def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, smoke: bool = True) -> Path:
     run = tmp_path / "health"
     static = tmp_path / "static"
     run.mkdir()
@@ -59,11 +59,15 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "configs/experiments/task005_health_u-t-c-b.yaml"
     ).to_dict()
     config["source_static_run"] = str(static)
-    config["smoke"] = {
-        "source_control_windows": 1,
-        "later_stages": 1,
-        "later_windows": 3,
-    }
+    config["smoke"] = (
+        {
+            "source_control_windows": 1,
+            "later_stages": 1,
+            "later_windows": 3,
+        }
+        if smoke
+        else None
+    )
     (run / "config.resolved.yaml").write_text(
         yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
     )
@@ -183,7 +187,18 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     }
     (run / "provenance.json").write_text(json.dumps(provenance), encoding="utf-8")
     rows: list[dict[str, Any]] = []
-    for domain, starts in (("U", (600,)), ("T", (0, 50_000, 100_000))):
+    domain_windows = (
+        (("U", (600,)), ("T", (0, 50_000, 100_000)))
+        if smoke
+        else (
+            ("U", (600,)),
+            ("T", (0, 50_000, 100_000, 150_000)),
+            ("C", (0, 50_000, 100_000, 150_000)),
+            ("B", (0, 50_000, 100_000, 150_000)),
+        )
+    )
+    entries_by_domain = {entry.dataset_id: entry for entry in entries}
+    for domain, starts in domain_windows:
         for window_id, start in enumerate(starts):
             stop = start + (200 if domain == "U" else 50_000)
             benign_count = 100 if domain == "U" else 49_900
@@ -201,17 +216,19 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 f"task005-health-cache-v1|{fingerprints['U']}|{fingerprints[domain]}|"
                 f"42|{domain}|{window_id}"
             )
-            local = artifact_module.deterministic_reference_positions(
+            local = deterministic_reference_positions(
                 0, stop - start, sample_count, identity=identity
             )
             positions = np.asarray(local + start, dtype=np.int64)
-            available = domain == "T" and window_id == 2
+            entry = entries_by_domain.get(domain)
+            available = entry is not None and window_id > entry.label_return_window
             rows.append(
                 {
                     "source_domain": "U",
                     "current_domain": domain,
                     "transition": f"U->{domain}",
                     "seed": 42,
+                    "source_run_identity": "checkpoint-sha",
                     "window_id": window_id,
                     "row_start": start,
                     "row_stop": stop,
@@ -239,10 +256,8 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                     "delayed_benign_fpr": 0.0 if available else None,
                     "delayed_brier_score": 0.1 if available else None,
                     "delayed_sample_count": 100 if available else None,
-                    "delayed_positions_digest": row_positions_digest(
-                        entries[0].chronological_positions
-                    )
-                    if available
+                    "delayed_positions_digest": row_positions_digest(entry.chronological_positions)
+                    if available and entry is not None
                     else None,
                 }
             )
@@ -258,7 +273,7 @@ def _health_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         json.dumps(
             {
                 "status": "complete",
-                "smoke": True,
+                "smoke": smoke,
                 "health_window_count": len(rows),
                 "source_domain": "U",
                 "sequence": ["U", "T", "C", "B"],
@@ -303,6 +318,70 @@ def test_early_delayed_labels_are_rejected(tmp_path: Path, monkeypatch: pytest.M
     frame.loc[target, "delayed_positions_digest"] = row_positions_digest(range(100))
     frame.to_csv(run / "health_windows.csv", index=False)
     with pytest.raises(ValueError, match="before release"):
+        validate_health_run(run, allow_smoke=True)
+
+
+def test_delayed_labels_cannot_become_unavailable_after_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _health_run(tmp_path, monkeypatch)
+    frame = pd.read_csv(run / "health_windows.csv")
+    target = (frame["current_domain"] == "T") & (frame["window_id"] == 2)
+    frame.loc[target, "delayed_labels_available"] = 0
+    for column in (
+        "delayed_attack_prevalence",
+        "delayed_attack_recall",
+        "delayed_benign_fpr",
+        "delayed_brier_score",
+        "delayed_sample_count",
+        "delayed_positions_digest",
+    ):
+        frame.loc[target, column] = None
+    frame.to_csv(run / "health_windows.csv", index=False)
+    with pytest.raises(ValueError, match="unavailable after release"):
+        validate_health_run(run, allow_smoke=True)
+
+
+def test_non_smoke_run_missing_entire_later_domain_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _health_run(tmp_path, monkeypatch, smoke=False)
+    frame = pd.read_csv(run / "health_windows.csv")
+    frame = frame[frame["current_domain"] != "C"]
+    frame.to_csv(run / "health_windows.csv", index=False)
+    summary_path = run / "health_run_summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["health_window_count"] = len(frame)
+    summary["state_counts"] = {
+        state: int((frame["health_state"] == state).sum())
+        for state in ("SAFE", "UNCERTAIN", "HARMFUL")
+    }
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    with pytest.raises(ValueError, match="domain/partition coverage differs"):
+        validate_health_run(run)
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    (
+        ("source_domain", "T", "source domain differs"),
+        ("seed", 43, "seed differs"),
+        ("transition", "T->U", "transition differs"),
+        ("source_run_identity", "forged", "source run identity differs"),
+    ),
+)
+def test_health_window_identity_corruption_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    column: str,
+    value: Any,
+    message: str,
+) -> None:
+    run = _health_run(tmp_path, monkeypatch)
+    frame = pd.read_csv(run / "health_windows.csv")
+    frame.loc[0, column] = value
+    frame.to_csv(run / "health_windows.csv", index=False)
+    with pytest.raises(ValueError, match=message):
         validate_health_run(run, allow_smoke=True)
 
 
