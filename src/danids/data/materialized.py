@@ -457,6 +457,28 @@ class PartitionView:
                 final_partial=(stop - start) < window_size,
             )
 
+    def health_windows(self, window_size: int) -> Iterator[PrequentialWindow]:
+        """Yield label-gated validation or online windows for non-adaptive health scans."""
+
+        if self.partition_kind not in {PartitionKind.VALIDATION, PartitionKind.ONLINE_STREAM}:
+            raise TypeError("health windows require validation or online-stream data")
+        if window_size <= 0:
+            raise ValueError("window_size must be positive")
+        for window_id, (start, stop) in enumerate(self._ranges(window_size)):
+            view = PredictionView(
+                np.asarray(self.dataset.features[start:stop], dtype=np.float32).copy(),
+                self._metadata(start, stop),
+                np.arange(start, stop, dtype=np.int64),
+                self.feature_columns,
+            )
+            yield PrequentialWindow(
+                window_id=window_id,
+                prediction_view=view,
+                binary_labels=np.asarray(self.dataset.binary_labels[start:stop], dtype=np.int8),
+                native_attack_labels=self._native(start, stop),
+                final_partial=(stop - start) < window_size,
+            )
+
 
 def load_sorted_prefix_windows(
     spec: DatasetSpec,
