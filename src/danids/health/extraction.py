@@ -276,6 +276,11 @@ def extract_label_free_window(
             if isinstance(value, (bool, int, float))
         }
         per_feature = np.asarray(raw_per_feature, dtype=np.float64)
+    # Cache JSON is key-sorted, so normalize fresh and cached results identically
+    # before their insertion order can influence the health-window CSV schema.
+    distribution_features = {
+        key: distribution_features[key] for key in sorted(distribution_features)
+    }
     current_embeddings = _infer_embeddings(model, current, device=device)
     features: dict[str, float | int | bool | str | None] = {
         **distribution_features,
