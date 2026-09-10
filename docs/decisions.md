@@ -401,6 +401,48 @@ policy evaluation.
 
 ---
 
+## D040 — Fair Always-Adapt comparator
+
+**Date:** 2026-09-10
+
+**Old rule:** Study 4 required an unconditional adaptation comparator but did not define
+its exact scarce-label and candidate-promotion mechanics.
+
+**New rule:** Always-Adapt uses the frozen Core label-blind 25-row selector, one-window
+delay, 100-label per-scope cap, 20/5 replay/audit allocation, historical 400/100 memory,
+and audit candidate guard. After every complete delayed release it unconditionally
+attempts A4 replay update using all currently released training-capability rows. It does
+not inspect the health prediction when deciding whether to query or adapt.
+
+**Reason:** This is the narrowest strong unconditional comparator that controls label
+access, delay, training evidence, replay support, and safety gating against Core.
+
+**Status:** Prospectively frozen for confirmatory Study 4.
+
+**Affected experiments:** Study 4 Always-Adapt treatment only.
+
+## D041 — Cross-boundary delayed-release bookkeeping
+
+**Date:** 2026-09-10
+
+**Old rule:** Core permitted a final-window query to release after the next global
+prediction, but E4 stage-boundary execution order was not recorded as a run-level rule.
+
+**New rule:** A pending query at a domain boundary remains owned by its opaque source
+scope. It releases immediately after the first prediction in the next administrative
+stage, before any new-scope query or action. The old scope is then closed and its replay
+and audit escrow is activated historically. At final sequence termination, a query with
+no subsequent prediction remains pending and is never released or consumed.
+
+**Reason:** The rule preserves the one-prediction delay across administrative boundaries
+without revealing the boundary to the controller or inventing a terminal label release.
+
+**Status:** Prospectively frozen for confirmatory Study 4.
+
+**Affected experiments:** Study 4 chronological E4 execution harness.
+
+---
+
 ## Template for future decisions
 
 ### DXXX — Short decision name

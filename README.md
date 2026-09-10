@@ -144,14 +144,14 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
-**TASK-006 — Study 4 intervention and DANIDS-Core foundation.** The package now
-provides explicit A0–A4 candidate actions with rollback, replay/audit capability
-separation, delayed incremental supervision, and the prospectively frozen transparent
-DANIDS-Core state machine. Core consumes a strict 28-feature frozen health artifact,
-uses deterministic 25-label queries, audit-backed promotion/reset, and fixed-data/current-
-model health references. The confirmatory Study-4 harness and learned DANIDS-Policy are
-not implemented or run in this stage. See
-[`docs/study4_core_policy.md`](docs/study4_core_policy.md).
+**TASK-006 — Study 4 intervention and DANIDS-Core.** The package provides explicit
+A0–A4 candidate actions with rollback, replay/audit capability separation, delayed
+incremental supervision, and the prospectively frozen transparent DANIDS-Core state
+machine. The chronological E4 harness executes `STATIC`, `ALWAYS_ADAPT`, and
+`DANIDS_CORE` with write-once provenance and artifact-only aggregation. The full
+confirmatory matrix and learned DANIDS-Policy were not run or implemented. See
+[`docs/study4_core_policy.md`](docs/study4_core_policy.md) and
+[`docs/study4_execution_harness.md`](docs/study4_execution_harness.md).
 
 **TASK-005 — Study 3 model health.** The package now extracts leakage-safe
 window health signals from exact frozen Study-1 states, assigns Wilson-supported

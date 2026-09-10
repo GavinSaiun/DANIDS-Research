@@ -792,15 +792,20 @@ def _write_bytes_exclusive(path: Path, value: bytes) -> None:
 def _normalise_health_artifact(
     provenance: CoreRunProvenance,
     frozen: FrozenHealthModel | None,
+    serialized_model: bytes | None = None,
 ) -> tuple[dict[str, Any], bytes]:
     if provenance.artifact_mode == "synthetic_test":
-        if frozen is not None:
+        if frozen is not None or serialized_model is not None:
             raise ValueError("synthetic Core artifact must not bundle a production health model")
         return {"mode": "synthetic_test"}, b""
     if not isinstance(frozen, FrozenHealthModel):
         raise ValueError("production Core artifacts require a validated FrozenHealthModel")
     manifest = dict(frozen.manifest)
-    model_bytes = pickle.dumps(frozen.model, protocol=5)
+    model_bytes = (
+        pickle.dumps(frozen.model, protocol=5)
+        if serialized_model is None
+        else bytes(serialized_model)
+    )
     if hashlib.sha256(model_bytes).hexdigest() != frozen.serialized_model_sha256:
         raise ValueError("frozen health model no longer serializes to its validated digest")
     if (
@@ -826,6 +831,7 @@ def write_core_run_artifacts(
     references: Sequence[R1ReferenceState | Mapping[str, Any]],
     audit_evidence: Sequence[AdministrativeAuditEvidence | Mapping[str, Any]] = (),
     frozen_health_model: FrozenHealthModel | None = None,
+    frozen_health_model_bytes: bytes | None = None,
 ) -> Path:
     """Write one complete Core provenance bundle and refuse every overwrite."""
 
@@ -834,7 +840,7 @@ def write_core_run_artifacts(
         raise FileExistsError(f"refusing to overwrite Core run artifact directory: {output}")
     provenance_payload = provenance.to_dict()
     health_manifest_payload, health_model_bytes = _normalise_health_artifact(
-        provenance, frozen_health_model
+        provenance, frozen_health_model, frozen_health_model_bytes
     )
     window_payload = {
         "version": CORE_RUN_ARTIFACT_VERSION,

@@ -1,0 +1,14 @@
+experiment_id: E4_STATIC_U-T-C-B_s42
+study: E4
+method: STATIC
+seed: 42
+sequence: [U, T, C, B]
+core_config: configs/experiments/task006_core_u-t-c-b.yaml
+health_config: configs/experiments/task005_health_u-t-c-b.yaml
+always_adapt:
+  action: A4_REPLAY_UPDATE
+  query_timing: every_pending_free_window_until_budget_exhausted
+  use_core_query_selector: true
+  use_core_delay_and_budget: true
+  use_core_allocation: true
+  use_audit_guard: true
