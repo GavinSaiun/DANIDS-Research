@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from typing import Literal
 
 import numpy as np
 import torch
@@ -21,10 +22,12 @@ from danids.data.preprocessing import NumericPreprocessor
 from danids.data.types import LearningBatch, require_learning_batch
 from danids.models.mlp import StaticMLP, model_state_digest
 
+AdaptationMethod = ContinualMethod | Literal["head_update"]
+
 
 @dataclass(frozen=True, slots=True)
 class AdaptationResult:
-    method: ContinualMethod
+    method: AdaptationMethod
     optimizer_steps: int
     epochs: int
     target_rows: int
@@ -51,23 +54,27 @@ def _train(
     preprocessor: NumericPreprocessor,
     config: AdaptationConfig,
     *,
-    method: ContinualMethod,
+    method: AdaptationMethod,
     target: LearningBatch,
     replay: LearningBatch | None,
     device: torch.device,
     seed: int,
     batches_for_epoch: Callable[[int], list[LearningBatch]],
     penalty: Callable[[], Tensor] | None = None,
+    trainable_names: frozenset[str] | None = None,
 ) -> AdaptationResult:
     require_learning_batch(target)
     if replay is not None:
         require_learning_batch(replay)
     before = model_state_digest(model)
     model.to(device)
-    for parameter in model.parameters():
-        parameter.requires_grad_(True)
+    for name, parameter in model.named_parameters():
+        parameter.requires_grad_(trainable_names is None or name in trainable_names)
+    trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    if not trainable:
+        raise ValueError("adaptation requires at least one trainable parameter")
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+        trainable, lr=config.learning_rate, weight_decay=config.weight_decay
     )
     loss_function = nn.BCEWithLogitsLoss()
     optimizer_steps = 0
@@ -126,6 +133,38 @@ def adapt_naive_ft(
         batches_for_epoch=lambda epoch_seed: _shuffled_batches(
             target, config.batch_size, epoch_seed
         ),
+    )
+
+
+def adapt_head_only(
+    model: StaticMLP,
+    preprocessor: NumericPreprocessor,
+    target: LearningBatch,
+    config: AdaptationConfig,
+    *,
+    device: torch.device,
+    seed: int,
+) -> AdaptationResult:
+    """Fine-tune only the binary classification head using TASK-004 defaults."""
+
+    if config.method != "naive_ft":
+        raise ValueError("head-only adaptation requires target-only TASK-004 training defaults")
+    head_names = frozenset(
+        f"binary_head.{name}" for name, _ in model.binary_head.named_parameters()
+    )
+    return _train(
+        model,
+        preprocessor,
+        config,
+        method="head_update",
+        target=target,
+        replay=None,
+        device=device,
+        seed=seed,
+        batches_for_epoch=lambda epoch_seed: _shuffled_batches(
+            target, config.batch_size, epoch_seed
+        ),
+        trainable_names=head_names,
     )
 
 
@@ -213,9 +252,11 @@ def adapt_ft_mem(
 
 
 __all__ = [
+    "AdaptationMethod",
     "AdaptationResult",
     "adapt_er",
     "adapt_ewc",
     "adapt_ft_mem",
+    "adapt_head_only",
     "adapt_naive_ft",
 ]
