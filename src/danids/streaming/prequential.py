@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterator, Sequence
 from enum import StrEnum
 
@@ -9,7 +11,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from danids.data.types import ObservedStreamEvaluation, PredictionView
+from danids.data.types import LearningBatch, ObservedStreamEvaluation, PartitionKind, PredictionView
 
 
 class ProtocolOrderError(RuntimeError):
@@ -20,6 +22,41 @@ class WindowState(StrEnum):
     AWAITING_PREDICTION = "awaiting_prediction"
     PREDICTED = "predicted"
     OBSERVED = "observed"
+
+
+SUPERVISION_SCOPE_TOKEN_VERSION = "task006-online-stream-scope-v1"
+
+
+def _is_sha256(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def derive_supervision_scope_token(
+    *, source_sha256: str, split_version: str, row_start: int, row_stop: int
+) -> str:
+    """Derive an opaque, reproducible scope token without semantic domain identity."""
+
+    if len(source_sha256) != 64 or not split_version or row_start < 0 or row_stop <= row_start:
+        raise ValueError("online-stream scope identity is invalid")
+    try:
+        int(source_sha256, 16)
+    except ValueError as exc:
+        raise ValueError("online-stream source fingerprint is not SHA-256") from exc
+    payload = {
+        "version": SUPERVISION_SCOPE_TOKEN_VERSION,
+        "source_sha256": source_sha256.lower(),
+        "split_version": split_version,
+        "row_start": row_start,
+        "row_stop": row_stop,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class PrequentialWindow:
@@ -33,14 +70,27 @@ class PrequentialWindow:
         binary_labels: NDArray[np.int8],
         native_attack_labels: NDArray[np.object_],
         final_partial: bool,
+        partition_kind: PartitionKind,
+        supervision_scope_token: str | None,
     ) -> None:
         self.window_id = window_id
         self.prediction_view = prediction_view
         self._binary_labels = binary_labels
         self._native_attack_labels = native_attack_labels
         self._final_partial = final_partial
+        self.partition_kind = partition_kind
+        self.supervision_scope_token = supervision_scope_token
         self._state = WindowState.AWAITING_PREDICTION
         self._predictions: NDArray[np.float64] | None = None
+        if not (
+            len(self.prediction_view) == len(self._binary_labels) == len(self._native_attack_labels)
+        ):
+            raise ValueError("prequential window features and hidden labels are misaligned")
+        if partition_kind is PartitionKind.ONLINE_STREAM:
+            if not _is_sha256(supervision_scope_token):
+                raise ValueError("online windows require an opaque supervision-scope token")
+        elif supervision_scope_token is not None:
+            raise ValueError("non-online windows cannot carry a supervision-scope token")
 
     @property
     def state(self) -> WindowState:
@@ -68,6 +118,42 @@ class PrequentialWindow:
             values.setflags(write=False)
             self._predictions = values
         self._state = WindowState.PREDICTED
+
+    def _stage_delayed_query(self, row_positions: Sequence[int]) -> LearningBatch:
+        """Stage selected labels for the supervision queue without evaluator reveal.
+
+        This internal capability exists solely for delayed-supervision infrastructure.
+        Policy code receives only the label-free ``PredictionView`` and selected row
+        positions; it never receives the returned learning batch.
+        """
+
+        if self._state is not WindowState.PREDICTED:
+            raise ProtocolOrderError(
+                f"window {self.window_id} queries must be staged after prediction and "
+                "before evaluator observation"
+            )
+        if self.partition_kind is not PartitionKind.ONLINE_STREAM:
+            raise TypeError("delayed queries require a proven online-stream window")
+        positions = tuple(sorted(int(value) for value in row_positions))
+        if not positions or len(positions) != len(set(positions)):
+            raise ValueError("delayed query positions must be non-empty and distinct")
+        index_by_position = {
+            int(position): index
+            for index, position in enumerate(self.prediction_view.row_positions)
+        }
+        try:
+            indices = np.asarray([index_by_position[value] for value in positions], dtype=np.int64)
+        except KeyError as exc:
+            raise ValueError("query position is absent from the predicted window") from exc
+        return LearningBatch(
+            self.prediction_view.features[indices],
+            self._binary_labels[indices],
+            self._native_attack_labels[indices],
+            self.prediction_view.metadata.iloc[indices],
+            self.prediction_view.row_positions[indices],
+            self.prediction_view.feature_columns,
+            PartitionKind.ONLINE_STREAM,
+        )
 
     def observe(self) -> ObservedStreamEvaluation:
         """Reveal labels once for offline evaluation, never as learning data."""
@@ -117,6 +203,8 @@ class _StreamCursor(Iterator[PrequentialWindow]):
             binary_labels=self._stream._binary_labels[selection],
             native_attack_labels=self._stream._native_attack_labels[selection],
             final_partial=(stop - self._offset) < self._stream.window_size,
+            partition_kind=PartitionKind.ONLINE_STREAM,
+            supervision_scope_token=self._stream.supervision_scope_token,
         )
         self._active = window
         self._offset = stop
@@ -137,6 +225,7 @@ class PrequentialStream:
         row_positions: NDArray[np.int64],
         feature_columns: tuple[str, ...],
         window_size: int,
+        supervision_scope_token: str,
     ) -> None:
         if window_size <= 0:
             raise ValueError("window_size must be positive")
@@ -160,6 +249,9 @@ class PrequentialStream:
         self._row_positions.setflags(write=False)
         self.feature_columns = feature_columns
         self.window_size = window_size
+        if not _is_sha256(supervision_scope_token):
+            raise ValueError("online stream requires an opaque supervision-scope token")
+        self.supervision_scope_token = supervision_scope_token
 
     @property
     def window_count(self) -> int:

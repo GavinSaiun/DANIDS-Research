@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from danids.config.continual import load_continual_experiment_config
+from danids.config.core import load_study4_core_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
 from danids.config.health import load_health_experiment_config
 from danids.config.static import load_static_experiment_config
@@ -26,6 +27,10 @@ from danids.experiments.static import (
     SmokeLimits,
     load_or_generate_static_manifests,
     run_static_experiment,
+)
+from danids.policy.health_artifact import (
+    build_health_model_artifact,
+    validate_health_model_artifact,
 )
 from danids.utils.reproducibility import set_global_seed
 
@@ -245,6 +250,54 @@ def _evaluate_health_study3(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_core_config_study4(args: argparse.Namespace) -> int:
+    config = load_study4_core_config(args.core_config)
+    print(json.dumps(config.to_dict(), indent=2))
+    return 0
+
+
+def _build_health_model_study4(args: argparse.Namespace) -> int:
+    config = load_study4_core_config(args.core_config)
+    output = build_health_model_artifact(args.study3_dataset, args.output_dir)
+    frozen = validate_health_model_artifact(
+        output,
+        study3_dataset_path=args.study3_dataset,
+    )
+    print(
+        json.dumps(
+            {
+                "experiment_id": config.experiment.experiment_id,
+                "artifact_directory": str(output),
+                "artifact_identity_sha256": frozen.artifact_identity,
+                "serialized_model_sha256": frozen.serialized_model_sha256,
+                "tau_safe": config.health.tau_safe,
+                "tau_harmful": config.health.tau_harmful,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _validate_health_model_study4(args: argparse.Namespace) -> int:
+    frozen = validate_health_model_artifact(
+        args.artifact_dir,
+        study3_dataset_path=args.study3_dataset,
+    )
+    print(
+        json.dumps(
+            {
+                "artifact_directory": str(Path(args.artifact_dir).resolve()),
+                "artifact_identity_sha256": frozen.artifact_identity,
+                "serialized_model_sha256": frozen.serialized_model_sha256,
+                "status": "valid",
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -359,6 +412,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_health.add_argument("--output-dir", required=True, type=Path)
     evaluate_health.set_defaults(handler=_evaluate_health_study3)
+
+    validate_core = subparsers.add_parser(
+        "validate-core-config-study4",
+        help="validate the prospectively frozen TASK-006 Core configuration",
+    )
+    validate_core.add_argument("--core-config", required=True, type=Path)
+    validate_core.set_defaults(handler=_validate_core_config_study4)
+
+    build_core_health = subparsers.add_parser(
+        "build-health-model-study4",
+        help="build the frozen write-once TASK-006 Core health-model artifact",
+    )
+    build_core_health.add_argument("--core-config", required=True, type=Path)
+    build_core_health.add_argument("--study3-dataset", required=True, type=Path)
+    build_core_health.add_argument("--output-dir", required=True, type=Path)
+    build_core_health.set_defaults(handler=_build_health_model_study4)
+
+    validate_core_health = subparsers.add_parser(
+        "validate-health-model-study4",
+        help="strictly validate a frozen TASK-006 Core health-model artifact",
+    )
+    validate_core_health.add_argument("--artifact-dir", required=True, type=Path)
+    validate_core_health.add_argument("--study3-dataset", type=Path)
+    validate_core_health.set_defaults(handler=_validate_health_model_study4)
     return parser
 
 

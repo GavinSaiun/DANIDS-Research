@@ -126,6 +126,8 @@ def test_cache_hit_and_miss_produce_identically_ordered_health_features(
             binary_labels=validation_labels,
             native_attack_labels=np.asarray(["Benign", "Attack", "Benign", "Attack"], dtype=object),
             final_partial=False,
+            partition_kind=PartitionKind.ONLINE_STREAM,
+            supervision_scope_token="a" * 64,
         )
 
     arguments = {

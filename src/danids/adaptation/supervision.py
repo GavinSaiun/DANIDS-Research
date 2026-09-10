@@ -19,6 +19,15 @@ INCREMENTAL_SUPERVISION_VERSION = "task006-incremental-delay-v1"
 
 @dataclass(frozen=True, slots=True)
 class QueryProvenance:
+    """Exact delayed-label timing and row evidence.
+
+    ``query_window`` and ``release_window`` retain their established artifact
+    names, but are global chronological prediction indices.  The explicit index
+    permits a query selected in a domain's final local window to be released after
+    the next prediction even when that prediction begins a new opaque scope.
+    """
+
+    scope_token: str
     query_window: int
     release_window: int
     count: int
@@ -82,6 +91,14 @@ class IncrementalDelayedSupervision:
         return sum(len(batch) for batch in self._available)
 
     @property
+    def query_count(self) -> int:
+        return len(self._pending)
+
+    @property
+    def pending_count(self) -> int:
+        return sum(not item.released for item in self._pending)
+
+    @property
     def available_batch(self) -> ReleasedLabelBatch | None:
         if not self._available:
             return None
@@ -92,6 +109,8 @@ class IncrementalDelayedSupervision:
         window: PrequentialWindow,
         observed: ObservedStreamEvaluation,
         row_positions: tuple[int, ...] | list[int],
+        *,
+        prediction_index: int | None = None,
     ) -> QueryProvenance:
         """Register label-blind positions after prediction and keep their labels hidden."""
 
@@ -124,9 +143,62 @@ class IncrementalDelayedSupervision:
             observed.feature_columns,
             PartitionKind.ONLINE_STREAM,
         )
+        return self._register_hidden_query(
+            window,
+            positions,
+            hidden,
+            prediction_index=prediction_index,
+        )
+
+    def request_from_predicted_window(
+        self,
+        window: PrequentialWindow,
+        row_positions: tuple[int, ...] | list[int],
+        *,
+        prediction_index: int | None = None,
+    ) -> QueryProvenance:
+        """Stage a query while complete current-window labels remain evaluator-hidden."""
+
+        if window.state is not WindowState.PREDICTED:
+            raise RuntimeError(
+                "policy-safe queries must be staged after prediction and before observation"
+            )
+        positions = tuple(sorted(int(value) for value in row_positions))
+        if not positions:
+            raise ValueError("an incremental query must request at least one row")
+        if len(positions) != len(set(positions)):
+            raise ValueError("a query cannot contain duplicate row positions")
+        if self._queried_positions.intersection(positions):
+            raise ValueError("duplicate query position: a row cannot be queried more than once")
+        if len(positions) > self.remaining_budget:
+            raise ValueError("query would exceed the remaining 100-label domain budget")
+        hidden = window._stage_delayed_query(positions)
+        return self._register_hidden_query(
+            window,
+            positions,
+            hidden,
+            prediction_index=prediction_index,
+        )
+
+    def _register_hidden_query(
+        self,
+        window: PrequentialWindow,
+        positions: tuple[int, ...],
+        hidden: LearningBatch,
+        *,
+        prediction_index: int | None,
+    ) -> QueryProvenance:
+        """Record a private label batch after public timing/budget validation."""
+
+        if not np.array_equal(hidden.row_positions, np.asarray(positions, dtype=np.int64)):
+            raise ValueError("hidden query batch differs from the selected row positions")
+        query_index = window.window_id if prediction_index is None else prediction_index
+        if type(query_index) is not int or query_index < 0:
+            raise ValueError("query prediction index must be a non-negative integer")
         provenance = QueryProvenance(
-            query_window=window.window_id,
-            release_window=window.window_id + self.delay_windows,
+            scope_token=self.domain_id,
+            query_window=query_index,
+            release_window=query_index + self.delay_windows,
             count=len(positions),
             row_positions=positions,
             row_positions_digest=row_positions_digest(positions),
@@ -135,11 +207,19 @@ class IncrementalDelayedSupervision:
         self._queried_positions.update(positions)
         return provenance
 
-    def release_after_prediction(self, window: PrequentialWindow) -> ReleasedLabelBatch | None:
-        if window.state is not WindowState.OBSERVED:
+    def release_after_prediction(
+        self,
+        window: PrequentialWindow,
+        *,
+        prediction_index: int | None = None,
+    ) -> ReleasedLabelBatch | None:
+        if window.state is WindowState.AWAITING_PREDICTION:
             raise RuntimeError("labels may be released only after the current window prediction")
+        release_index = window.window_id if prediction_index is None else prediction_index
+        if type(release_index) is not int or release_index < 0:
+            raise ValueError("release prediction index must be a non-negative integer")
         for item in self._pending:
-            if not item.released and item.provenance.release_window <= window.window_id:
+            if not item.released and item.provenance.release_window <= release_index:
                 item.released = True
                 self._available.append(item.hidden_batch)
         return self.available_batch
