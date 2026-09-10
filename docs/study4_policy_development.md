@@ -84,5 +84,23 @@ danids evaluate-policy-development `
   --output-dir study4/policy-development
 ```
 
+## Execution-performance notes
+
+Execution accelerators are deliberately outside the scientific evidence. A
+single policy-development invocation reuses raw-source SHA-256 results only
+while the resolved path, byte size, and nanosecond modification time remain
+unchanged. Exact Core query rankings and canonical contiguous-position digests
+use small bounded process-local memos. Sibling actions share one immutable
+successor-window payload, but receive independent prequential label gates; no
+candidate model, optimizer, supervision, replay, audit, R1, or controller state
+is shared.
+
+An existing output directory is a resumable boundary: the runner validates a
+complete matching unit and returns it, while incomplete, corrupt, or mismatched
+artifacts fail instead of being overwritten. When launching multiple units,
+keep the five roll-ins for one rotation/seed sequential so they cannot race to
+populate an identical distribution-signal cache entry. Parallelize distinct
+rotation/seed groups and cap native math threads per process.
+
 `--smoke` bounds stages, windows, and anchors. Smoke units validate and can be
 aggregated only with explicit `--allow-smoke`; final aggregation rejects them.

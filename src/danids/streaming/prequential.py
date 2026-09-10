@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from collections.abc import Iterator, Sequence
@@ -75,8 +76,10 @@ class PrequentialWindow:
     ) -> None:
         self.window_id = window_id
         self.prediction_view = prediction_view
-        self._binary_labels = binary_labels
-        self._native_attack_labels = native_attack_labels
+        self._binary_labels = np.asarray(binary_labels, dtype=np.int8).view()
+        self._native_attack_labels = np.asarray(native_attack_labels, dtype=object).view()
+        self._binary_labels.setflags(write=False)
+        self._native_attack_labels.setflags(write=False)
         self._final_partial = final_partial
         self.partition_kind = partition_kind
         self.supervision_scope_token = supervision_scope_token
@@ -118,6 +121,23 @@ class PrequentialWindow:
             values.setflags(write=False)
             self._predictions = values
         self._state = WindowState.PREDICTED
+
+    def fresh_gate(self) -> PrequentialWindow:
+        """Return an independent state gate over the same immutable window payload.
+
+        Counterfactual siblings may share raw rows, metadata, and evaluator-only
+        labels, but never gate state or predictions.  Labels remain inaccessible
+        until each returned gate independently completes prediction.
+        """
+
+        if self._state is not WindowState.AWAITING_PREDICTION:
+            raise ProtocolOrderError("only an untouched window may issue a fresh label gate")
+        if self._binary_labels.flags.writeable or self._native_attack_labels.flags.writeable:
+            raise RuntimeError("shared counterfactual label payload must be immutable")
+        clone = copy.copy(self)
+        clone._state = WindowState.AWAITING_PREDICTION
+        clone._predictions = None
+        return clone
 
     def _stage_delayed_query(self, row_positions: Sequence[int]) -> LearningBatch:
         """Stage selected labels for the supervision queue without evaluator reveal.

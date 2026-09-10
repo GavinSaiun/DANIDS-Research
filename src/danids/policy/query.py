@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -491,33 +492,16 @@ def _rank_digest(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def select_core_query(
-    prediction: PredictionView,
+@lru_cache(maxsize=16)
+def _select_core_query_cached(
+    positions: tuple[int, ...],
     *,
     seed: int,
     opaque_scope_token: str,
     window_id: int,
     query_ordinal: int,
+    current_digest: str,
 ) -> CoreQuerySelection:
-    """Choose exactly 25 current-window rows using no labels or semantic domain ID."""
-
-    if type(prediction) is not PredictionView:
-        raise TypeError("Core query selection accepts only a label-free PredictionView")
-    if not opaque_scope_token:
-        raise ValueError("query selection requires an opaque supervision-scope token")
-    if type(seed) is not int:
-        raise TypeError("query seed must be an integer")
-    if type(window_id) is not int or window_id < 0:
-        raise ValueError("query window ID must be a non-negative integer")
-    if type(query_ordinal) is not int or not 0 <= query_ordinal < 4:
-        raise ValueError("query ordinal must lie in [0, 3]")
-    raw = np.asarray(prediction.row_positions)
-    if raw.ndim != 1 or not np.issubdtype(raw.dtype, np.integer):
-        raise ValueError("prediction row positions must be a one-dimensional integer array")
-    positions = tuple(int(value) for value in raw)
-    if tuple(sorted(set(positions))) != positions:
-        raise ValueError("prediction row positions must be chronological and distinct")
-    current_digest = row_positions_digest(positions)
     if len(positions) < CORE_QUERY_BATCH_SIZE:
         return CoreQuerySelection(
             selector_version=CORE_QUERY_SELECTOR_VERSION,
@@ -559,6 +543,48 @@ def select_core_query(
         selected_positions=selected,
         selected_positions_digest=row_positions_digest(selected),
         reason="",
+    )
+
+
+def select_core_query(
+    prediction: PredictionView,
+    *,
+    seed: int,
+    opaque_scope_token: str,
+    window_id: int,
+    query_ordinal: int,
+) -> CoreQuerySelection:
+    """Choose exactly 25 current-window rows using no labels or semantic domain ID.
+
+    The bounded memo contains only the exact immutable row-position tuple and
+    selector identity.  It avoids performing the same label-blind SHA ranking a
+    second time when the selection is validated before registration.
+    """
+
+    if type(prediction) is not PredictionView:
+        raise TypeError("Core query selection accepts only a label-free PredictionView")
+    if not opaque_scope_token:
+        raise ValueError("query selection requires an opaque supervision-scope token")
+    if type(seed) is not int:
+        raise TypeError("query seed must be an integer")
+    if type(window_id) is not int or window_id < 0:
+        raise ValueError("query window ID must be a non-negative integer")
+    if type(query_ordinal) is not int or not 0 <= query_ordinal < 4:
+        raise ValueError("query ordinal must lie in [0, 3]")
+    raw = np.asarray(prediction.row_positions)
+    if raw.ndim != 1 or not np.issubdtype(raw.dtype, np.integer):
+        raise ValueError("prediction row positions must be a one-dimensional integer array")
+    positions = tuple(int(value) for value in raw)
+    if tuple(sorted(set(positions))) != positions:
+        raise ValueError("prediction row positions must be chronological and distinct")
+    current_digest = row_positions_digest(positions)
+    return _select_core_query_cached(
+        positions,
+        seed=seed,
+        opaque_scope_token=opaque_scope_token,
+        window_id=window_id,
+        query_ordinal=query_ordinal,
+        current_digest=current_digest,
     )
 
 

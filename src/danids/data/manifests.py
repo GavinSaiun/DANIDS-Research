@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -47,6 +47,35 @@ class SourceFingerprint:
     size_bytes: int
     modified_time_ns: int
     sha256: str
+
+
+@dataclass(slots=True)
+class SourceFingerprintCache:
+    """Bounded, invocation-local reuse of exact raw-source fingerprints."""
+
+    max_entries: int = 16
+    _entries: dict[str, SourceFingerprint] = field(default_factory=dict, init=False)
+
+    def __post_init__(self) -> None:
+        if self.max_entries <= 0:
+            raise ValueError("source-fingerprint cache size must be positive")
+
+    def fingerprint(self, path: str | Path) -> SourceFingerprint:
+        source_path = Path(path).resolve()
+        before = source_path.stat()
+        key = str(source_path)
+        cached = self._entries.get(key)
+        if (
+            cached is not None
+            and cached.size_bytes == before.st_size
+            and cached.modified_time_ns == before.st_mtime_ns
+        ):
+            return cached
+        current = _fingerprint_file(source_path, before.st_size, before.st_mtime_ns)
+        if key not in self._entries and len(self._entries) >= self.max_entries:
+            self._entries.pop(next(iter(self._entries)))
+        self._entries[key] = current
+        return current
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,21 +204,34 @@ class SplitManifest:
         return manifest
 
 
-def fingerprint_file(path: str | Path) -> SourceFingerprint:
-    """Hash the complete source file so input changes are never silent."""
-
-    source_path = Path(path).resolve()
+def _fingerprint_file(
+    source_path: Path, expected_size: int, expected_modified_time_ns: int
+) -> SourceFingerprint:
     digest = hashlib.sha256()
     with source_path.open("rb") as handle:
         while chunk := handle.read(1024 * 1024):
             digest.update(chunk)
     stat = source_path.stat()
+    if stat.st_size != expected_size or stat.st_mtime_ns != expected_modified_time_ns:
+        raise ManifestError("dataset source changed while its fingerprint was being computed")
     return SourceFingerprint(
         resolved_path=str(source_path),
         size_bytes=stat.st_size,
         modified_time_ns=stat.st_mtime_ns,
         sha256=digest.hexdigest(),
     )
+
+
+def fingerprint_file(
+    path: str | Path, *, cache: SourceFingerprintCache | None = None
+) -> SourceFingerprint:
+    """Hash the complete source file so input changes are never silent."""
+
+    if cache is not None:
+        return cache.fingerprint(path)
+    source_path = Path(path).resolve()
+    stat = source_path.stat()
+    return _fingerprint_file(source_path, stat.st_size, stat.st_mtime_ns)
 
 
 def timestamp_sort_key(series: pd.Series) -> tuple[pd.Series, str, str]:
@@ -233,6 +275,7 @@ def generate_split_manifest(
     split_version: str,
     seed: int,
     splits: SplitRatios | None = None,
+    fingerprint_cache: SourceFingerprintCache | None = None,
 ) -> SplitManifest:
     """Scan one dataset and produce a stable-sort chronological manifest."""
 
@@ -281,7 +324,7 @@ def generate_split_manifest(
         split_version=split_version,
         generator_version=MANIFEST_GENERATOR_VERSION,
         generation_seed=seed,
-        source=fingerprint_file(spec.path),
+        source=fingerprint_file(spec.path, cache=fingerprint_cache),
         row_count=len(timestamps),
         timestamp_column=spec.timestamp_column,
         chronological_start=chronological_start,
@@ -302,7 +345,12 @@ def generate_split_manifest(
     return manifest
 
 
-def verify_manifest_source(manifest: SplitManifest, spec: DatasetSpec) -> None:
+def verify_manifest_source(
+    manifest: SplitManifest,
+    spec: DatasetSpec,
+    *,
+    fingerprint_cache: SourceFingerprintCache | None = None,
+) -> None:
     """Fail if a manifest is paired with a different or changed source file."""
 
     if manifest.dataset_id != spec.dataset_id:
@@ -321,6 +369,6 @@ def verify_manifest_source(manifest: SplitManifest, spec: DatasetSpec) -> None:
         raise ManifestError("manifest label/timestamp schema differs from the dataset spec")
     if not set(spec.metadata_columns).issubset(manifest.metadata_columns):
         raise ManifestError("manifest omits required metadata columns")
-    current = fingerprint_file(spec.path)
+    current = fingerprint_file(spec.path, cache=fingerprint_cache)
     if current != manifest.source:
         raise ManifestError("dataset source fingerprint differs from the split manifest")
