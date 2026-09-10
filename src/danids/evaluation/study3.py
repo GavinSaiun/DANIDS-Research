@@ -577,12 +577,26 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
         raise ValueError("duplicate rotation/seed inputs in Study-3 aggregation")
     if len({run.contract_digest for run in validated}) != 1:
         raise ValueError("Study-3 runs have mixed scientific/data contracts")
-    feature_columns = [tuple(run.windows.columns) for run in validated]
-    if len(set(feature_columns)) != 1:
-        raise ValueError("Study-3 runs have mixed health feature contracts")
+    # Column order is serialization detail; the first validated run supplies the
+    # canonical output order only after exact semantic name-set agreement.
+    canonical_columns = tuple(validated[0].windows.columns)
+    if not validated[0].windows.columns.is_unique:
+        raise ValueError("Study-3 health feature contract contains duplicate column names")
+    canonical_column_set = set(canonical_columns)
+    for run in validated[1:]:
+        if not run.windows.columns.is_unique:
+            raise ValueError("Study-3 health feature contract contains duplicate column names")
+        current_column_set = set(run.windows.columns)
+        if current_column_set != canonical_column_set:
+            missing = sorted(canonical_column_set - current_column_set)
+            additional = sorted(current_column_set - canonical_column_set)
+            raise ValueError(
+                "Study-3 runs have mixed health feature contracts; "
+                f"missing={missing}, additional={additional}"
+            )
     frames: list[pd.DataFrame] = []
     for run in validated:
-        current = run.windows.copy()
+        current = run.windows.loc[:, list(canonical_columns)].copy()
         current.insert(0, "health_run", str(run.path))
         frames.append(current)
     dataset = pd.concat(frames, ignore_index=True)

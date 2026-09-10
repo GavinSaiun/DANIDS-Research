@@ -6,10 +6,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 
+import danids.health.extraction as extraction_module
 from danids.config.health import HealthPredictorConfig, load_health_experiment_config
+from danids.data.preprocessing import NumericPreprocessor
+from danids.data.types import LearningBatch, PartitionKind, PredictionView
 from danids.evaluation.study3 import detection_delay_rows
 from danids.health.cache import DistributionSignalCache, SourceReferenceCache
+from danids.health.extraction import HealthReference, extract_label_free_window
 from danids.health.predictors import build_grouped_folds, fit_fold_predictor
 from danids.health.signals import (
     SplitConformalCalibrator,
@@ -26,6 +31,7 @@ from danids.shift.signals import (
     source_median_bandwidth,
     wasserstein_aggregates,
 )
+from danids.streaming.prequential import PrequentialWindow
 
 
 def test_wilson_known_case() -> None:
@@ -61,6 +67,85 @@ def test_source_reference_cache_is_content_addressed_and_write_once(tmp_path: Pa
     assert all(np.array_equal(loaded[name], value) for name, value in arrays.items())
     cache.store(identity, arrays)
     assert cache.load({**identity, "checkpoint": "different"}) is None
+
+
+def test_cache_hit_and_miss_produce_identically_ordered_health_features(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    columns = ("F1", "F2")
+    training_features = np.asarray(
+        [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]], dtype=np.float32
+    )
+    training = LearningBatch(
+        training_features,
+        np.asarray([0, 1, 0, 1], dtype=np.int8),
+        np.asarray(["Benign", "Attack", "Benign", "Attack"], dtype=object),
+        pd.DataFrame({"timestamp": range(4)}),
+        np.arange(4, dtype=np.int64),
+        columns,
+        PartitionKind.INITIAL_TRAIN,
+    )
+    preprocessor = NumericPreprocessor().fit(training)
+    transformed = preprocessor.transform_features(training_features, columns)
+    validation_labels = np.asarray([0, 1, 0, 1], dtype=np.int8)
+    validation_scores = np.asarray([0.1, 0.9, 0.2, 0.8], dtype=np.float64)
+    reference = HealthReference(
+        source_domain="U",
+        training_positions=np.arange(4, dtype=np.int64),
+        transformed_features=transformed,
+        embeddings=np.zeros((4, 64), dtype=np.float32),
+        validation_scores=validation_scores,
+        reference_attack_rate=0.5,
+        reference_recall=1.0,
+        recall_floor=0.9,
+        mmd_bandwidth=1.0,
+        conformal=SplitConformalCalibrator.fit(validation_labels, validation_scores, alpha=0.1),
+    )
+    scores = np.asarray([0.2, 0.8, 0.3, 0.7], dtype=np.float64)
+    monkeypatch.setattr(extraction_module, "predict_scores", lambda *args, **kwargs: scores)
+    monkeypatch.setattr(
+        extraction_module,
+        "_infer_embeddings",
+        lambda *args, **kwargs: np.zeros((4, 64), dtype=np.float32),
+    )
+    config = load_health_experiment_config("configs/experiments/task005_health_u-t-c-b.yaml")
+    cache = DistributionSignalCache(tmp_path / "cache")
+
+    def window() -> PrequentialWindow:
+        return PrequentialWindow(
+            window_id=0,
+            prediction_view=PredictionView(
+                np.asarray(
+                    [[1.0, 0.0], [2.0, 1.0], [3.0, 2.0], [4.0, 3.0]],
+                    dtype=np.float32,
+                ),
+                pd.DataFrame({"timestamp": range(4)}),
+                np.arange(100, 104, dtype=np.int64),
+                columns,
+            ),
+            binary_labels=validation_labels,
+            native_attack_labels=np.asarray(["Benign", "Attack", "Benign", "Attack"], dtype=object),
+            final_partial=False,
+        )
+
+    arguments = {
+        "current_domain": "T",
+        "source_fingerprint": "source",
+        "current_fingerprint": "current",
+        "reference": reference,
+        "model": torch.nn.Identity(),
+        "preprocessor": preprocessor,
+        "threshold": 0.5,
+        "config": config,
+        "device": torch.device("cpu"),
+        "distribution_cache": cache,
+    }
+    cache_miss = extract_label_free_window(window(), **arguments)
+    cache_hit = extract_label_free_window(window(), **arguments)
+    assert tuple(cache_miss.label_free) == tuple(cache_hit.label_free)
+    miss_distribution = tuple(key for key in cache_miss.label_free if key.startswith("dist_"))
+    hit_distribution = tuple(key for key in cache_hit.label_free if key.startswith("dist_"))
+    assert miss_distribution == hit_distribution == tuple(sorted(miss_distribution))
 
 
 def test_frozen_study3_config_and_seed_override() -> None:

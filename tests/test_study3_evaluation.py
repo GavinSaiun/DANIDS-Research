@@ -182,6 +182,105 @@ def test_duplicate_rotation_seed_inputs_are_rejected(
         evaluate_health_study3([tmp_path / "first", tmp_path / "second"], tmp_path / "output")
 
 
+def _validated_runs(tmp_path: Path) -> dict[str, ValidatedHealthRun]:
+    dataset = health_meta_dataset()
+    runs: dict[str, ValidatedHealthRun] = {}
+    for index, source in enumerate(("U", "T", "C", "B")):
+        frame = (
+            dataset.loc[dataset["source_domain"] == source]
+            .drop(columns="health_run")
+            .reset_index(drop=True)
+        )
+        runs[source] = ValidatedHealthRun(
+            tmp_path / f"run-{source}",
+            42 + index,
+            source,
+            ROTATIONS[source],
+            f"identity-{source}-{42 + index}",
+            "contract",
+            frame,
+        )
+    return runs
+
+
+def test_aggregation_accepts_and_canonicalizes_reordered_columns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = _validated_runs(tmp_path)
+    canonical_columns = tuple(runs["U"].windows.columns)
+    reordered = runs["T"].windows.loc[:, list(reversed(canonical_columns))]
+    runs["T"] = ValidatedHealthRun(
+        runs["T"].path,
+        runs["T"].seed,
+        runs["T"].source_domain,
+        runs["T"].sequence,
+        runs["T"].source_identity,
+        runs["T"].contract_digest,
+        reordered,
+    )
+    monkeypatch.setattr(
+        study3_module,
+        "validate_health_run",
+        lambda path: runs[Path(path).name.removeprefix("run-")],
+    )
+    output = evaluate_health_study3([run.path for run in runs.values()], tmp_path / "evaluation")
+    aggregated = pd.read_csv(output / "study3_health_dataset.csv")
+    assert tuple(aggregated.columns) == ("health_run", *canonical_columns)
+
+
+@pytest.mark.parametrize("change", ("missing", "additional"))
+def test_aggregation_rejects_genuine_health_schema_differences(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    runs = _validated_runs(tmp_path)
+    changed = runs["T"].windows.copy()
+    if change == "missing":
+        changed = changed.drop(columns="dist_mmd2_linear_rbf")
+    else:
+        changed["dist_unexpected"] = 1.0
+    runs["T"] = ValidatedHealthRun(
+        runs["T"].path,
+        runs["T"].seed,
+        runs["T"].source_domain,
+        runs["T"].sequence,
+        runs["T"].source_identity,
+        runs["T"].contract_digest,
+        changed,
+    )
+    monkeypatch.setattr(
+        study3_module,
+        "validate_health_run",
+        lambda path: runs[Path(path).name.removeprefix("run-")],
+    )
+    with pytest.raises(ValueError, match="mixed health feature contracts"):
+        evaluate_health_study3([runs["U"].path, runs["T"].path], tmp_path / "evaluation")
+
+
+def test_aggregation_rejects_duplicate_health_column_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = _validated_runs(tmp_path)
+    changed = pd.concat(
+        [runs["T"].windows, runs["T"].windows.loc[:, ["dist_mmd2_linear_rbf"]]], axis=1
+    )
+    runs["T"] = ValidatedHealthRun(
+        runs["T"].path,
+        runs["T"].seed,
+        runs["T"].source_domain,
+        runs["T"].sequence,
+        runs["T"].source_identity,
+        runs["T"].contract_digest,
+        changed,
+    )
+    monkeypatch.setattr(
+        study3_module,
+        "validate_health_run",
+        lambda path: runs[Path(path).name.removeprefix("run-")],
+    )
+    with pytest.raises(ValueError, match="duplicate column names"):
+        evaluate_health_study3([runs["U"].path, runs["T"].path], tmp_path / "evaluation")
+
+
 def test_study3_results_are_deterministic() -> None:
     first = compute_study3_outputs(health_meta_dataset(), HealthPredictorConfig(), seed=42)
     second = compute_study3_outputs(health_meta_dataset(), HealthPredictorConfig(), seed=42)
