@@ -14,7 +14,7 @@ operating_envelope:
   target_fpr: 0.001
   delta_recall: 0.10
   confidence_level: 0.95
-source_static_run: runs/E1_STATIC_MLP_C-B-U-T_s42
+source_static_run: runs/E1_STATIC_MLP_T-C-B-U_s42
 sampling:
   source_reference_rows: 4096
   current_window_rows: 2048
