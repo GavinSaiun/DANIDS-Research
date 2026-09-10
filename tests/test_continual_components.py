@@ -112,6 +112,8 @@ def _window(batch: LearningBatch, window_id: int) -> PrequentialWindow:
         binary_labels=batch.binary_labels,
         native_attack_labels=batch.native_attack_labels,
         final_partial=False,
+        partition_kind=PartitionKind.ONLINE_STREAM,
+        supervision_scope_token="a" * 64,
     )
 
 

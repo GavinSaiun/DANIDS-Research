@@ -27,7 +27,7 @@ from danids.data.types import (
     PredictionView,
     ValidationSet,
 )
-from danids.streaming.prequential import PrequentialWindow
+from danids.streaming.prequential import PrequentialWindow, derive_supervision_scope_token
 
 MATERIALIZER_VERSION = "task002-npy-v2"
 
@@ -443,6 +443,12 @@ class PartitionView:
             raise TypeError("prequential windows require an online-stream partition")
         if window_size <= 0:
             raise ValueError("window_size must be positive")
+        scope_token = derive_supervision_scope_token(
+            source_sha256=self.dataset.manifest.source.sha256,
+            split_version=self.dataset.manifest.split_version,
+            row_start=self.selection.start,
+            row_stop=self.selection.stop,
+        )
         for window_id, (start, stop) in enumerate(self._ranges(window_size)):
             features = np.asarray(self.dataset.features[start:stop], dtype=np.float32).copy()
             positions = np.arange(start, stop, dtype=np.int64)
@@ -455,6 +461,8 @@ class PartitionView:
                 binary_labels=np.asarray(self.dataset.binary_labels[start:stop], dtype=np.int8),
                 native_attack_labels=self._native(start, stop),
                 final_partial=(stop - start) < window_size,
+                partition_kind=PartitionKind.ONLINE_STREAM,
+                supervision_scope_token=scope_token,
             )
 
     def health_windows(self, window_size: int) -> Iterator[PrequentialWindow]:
@@ -477,6 +485,17 @@ class PartitionView:
                 binary_labels=np.asarray(self.dataset.binary_labels[start:stop], dtype=np.int8),
                 native_attack_labels=self._native(start, stop),
                 final_partial=(stop - start) < window_size,
+                partition_kind=self.partition_kind,
+                supervision_scope_token=(
+                    derive_supervision_scope_token(
+                        source_sha256=self.dataset.manifest.source.sha256,
+                        split_version=self.dataset.manifest.split_version,
+                        row_start=self.selection.start,
+                        row_stop=self.selection.stop,
+                    )
+                    if self.partition_kind is PartitionKind.ONLINE_STREAM
+                    else None
+                ),
             )
 
 
@@ -515,6 +534,12 @@ def load_sorted_prefix_windows(
     binary = _binary(frame[spec.binary_label_column], spec.dataset_id)
     native = frame[spec.native_attack_column].astype(str).to_numpy(dtype=object)
     timestamps = _timestamps(frame[spec.timestamp_column])
+    scope_token = derive_supervision_scope_token(
+        source_sha256=manifest.source.sha256,
+        split_version=manifest.split_version,
+        row_start=manifest.online_stream.start,
+        row_stop=manifest.online_stream.stop,
+    )
     for window_id, start in enumerate(range(0, len(frame), window_size)):
         stop = min(start + window_size, len(frame))
         positions = np.arange(start, stop, dtype=np.int64)
@@ -530,4 +555,6 @@ def load_sorted_prefix_windows(
             binary_labels=binary[start:stop],
             native_attack_labels=native[start:stop],
             final_partial=(stop - start) < window_size,
+            partition_kind=PartitionKind.ONLINE_STREAM,
+            supervision_scope_token=scope_token,
         )

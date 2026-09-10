@@ -150,3 +150,26 @@ chosen here:
 
 No threshold recalibration policy, automatic adaptation trigger, domain-boundary signal,
 or final controller assumption is introduced by this foundation.
+
+## Prospectively frozen DANIDS-Core stage
+
+The bounded foundation above remains the reusable action substrate. The subsequent
+`study4/core-policy` stage prospectively freezes and implements the transparent Core
+controller before any Study-4 policy outcome is run. Its executable configuration is
+`configs/experiments/task006_core_u-t-c-b.yaml`; the complete operational contract is
+documented in `docs/study4_core_policy.md` and decisions D028–D039.
+
+This stage freezes:
+
+- the ordered 28-feature `combined_unlabelled` gradient-boosting health model and
+  overlap-component-safe fit/calibration artifact;
+- inclusive Strategy-C probability thresholds;
+- the exact 25-row deterministic label-blind incremental query rule;
+- A1 structural-infeasibility preflight and the normal A2-to-A4 escalation;
+- 20/5 replay/audit allocation for each released query;
+- audit-backed incident reset and audit authority for retention;
+- R1 fixed-data/current-model post-adaptation references; and
+- an exact typed policy information allowlist.
+
+The Study-4 experiment harness, confirmatory four-rotation runs, learned DANIDS-Policy,
+and oracle outcome study remain outside this implementation stage.

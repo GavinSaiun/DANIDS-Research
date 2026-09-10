@@ -18,11 +18,13 @@ from danids.models.training import predict_scores
 @dataclass(frozen=True, slots=True)
 class AuditReference:
     domain_id: str
-    learned_recall: float
+    learned_recall: float | None
 
     def validate(self) -> None:
-        if not self.domain_id or not 0.0 <= self.learned_recall <= 1.0:
-            raise ValueError("audit reference requires a domain and recall in [0, 1]")
+        if not self.domain_id:
+            raise ValueError("audit reference requires a non-empty domain")
+        if self.learned_recall is not None and not 0.0 <= self.learned_recall <= 1.0:
+            raise ValueError("supported audit recall must lie in [0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +119,14 @@ class AuditGuard:
             attack = labels == 1
             false_positives = int(np.sum(predicted & benign))
             true_positives = int(np.sum(predicted & attack))
-            recall_floor = max(0.0, reference.learned_recall - tolerance)
+            # A panel with no attack support still carries legitimate benign/FPR
+            # evidence.  None keeps recall explicitly unsupported rather than
+            # inventing a learned recall; zero prevents an unsupported TPR rule.
+            recall_floor = (
+                0.0
+                if reference.learned_recall is None
+                else max(0.0, reference.learned_recall - tolerance)
+            )
             assessment = classify_health(
                 false_positives=false_positives,
                 benign_support=int(np.sum(benign)),

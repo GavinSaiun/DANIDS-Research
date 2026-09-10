@@ -19,7 +19,7 @@ from danids.data.manifests import (
 from danids.data.registry import DatasetSpec
 from danids.data.schema import FeatureContract, read_csv_header, validate_schema
 from danids.data.types import LearningBatch, PartitionKind, PermanentHoldout, ValidationSet
-from danids.streaming.prequential import PrequentialStream
+from danids.streaming.prequential import PrequentialStream, derive_supervision_scope_token
 
 
 class DataLoadingError(ValueError):
@@ -222,5 +222,11 @@ def load_partitions(
         row_positions=stream_positions,
         feature_columns=contract.feature_columns,
         window_size=window_size,
+        supervision_scope_token=derive_supervision_scope_token(
+            source_sha256=manifest.source.sha256,
+            split_version=manifest.split_version,
+            row_start=manifest.online_stream.start,
+            row_stop=manifest.online_stream.stop,
+        ),
     )
     return LaterDomainPartitions(stream=stream, holdout=holdout)

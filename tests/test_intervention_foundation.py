@@ -87,6 +87,8 @@ def _window(
         binary_labels=batch.binary_labels,
         native_attack_labels=batch.native_attack_labels,
         final_partial=False,
+        partition_kind=PartitionKind.ONLINE_STREAM,
+        supervision_scope_token="a" * 64,
     )
     window.mark_predicted(np.full(len(batch), 0.5))
     return window, window.observe()
@@ -482,6 +484,8 @@ def test_unpredicted_window_and_unreleased_batch_cannot_adapt() -> None:
         binary_labels=raw.binary_labels,
         native_attack_labels=raw.native_attack_labels,
         final_partial=False,
+        partition_kind=PartitionKind.ONLINE_STREAM,
+        supervision_scope_token="a" * 64,
     )
     observed = ObservedStreamEvaluation(
         raw.features,

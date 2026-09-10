@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -30,6 +31,9 @@ from danids.health.states import HealthState, wilson_interval
 from danids.models.mlp import StaticMLP, model_state_digest
 from danids.models.training import predict_scores
 from danids.utils.reproducibility import set_global_seed
+
+REPLAY_FLAT_POSITIONS_DIGEST_VERSION = "task006-flat-replay-positions-v2"
+REPLAY_SCOPED_POSITIONS_DIGEST_VERSION = "task006-scoped-replay-positions-v1"
 
 
 class InterventionAction(StrEnum):
@@ -177,6 +181,8 @@ class InterventionRecord:
     rolled_back: bool
     rejection_reason: str
     wall_clock_update_seconds: float
+    replay_scoped_row_positions: str = "[]"
+    replay_scoped_row_positions_digest: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -247,6 +253,79 @@ def _json_positions(values: np.ndarray[Any, Any] | None) -> str:
 
 def _positions_digest(values: np.ndarray[Any, Any] | None) -> str:
     return "" if values is None else row_positions_digest(values)
+
+
+def replay_flat_positions_digest(
+    values: Sequence[int] | np.ndarray[Any, Any] | None,
+) -> str:
+    """Hash a sorted replay-position multiset (duplicates may exist across scopes)."""
+
+    if values is None:
+        return ""
+    positions = sorted(int(value) for value in values)
+    payload = {
+        "version": REPLAY_FLAT_POSITIONS_DIGEST_VERSION,
+        "positions": positions,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def replay_scoped_positions_digest(scopes: Sequence[Mapping[str, object]]) -> str:
+    """Validate/hash authoritative ``(scope, local-row)`` replay identities."""
+
+    normalised: list[dict[str, object]] = []
+    for item in scopes:
+        if set(item) != {"scope_id", "row_positions", "row_positions_digest"}:
+            raise ValueError("scoped replay row record has missing or additional fields")
+        scope_id = item["scope_id"]
+        raw_positions = item["row_positions"]
+        if not isinstance(scope_id, str) or not scope_id:
+            raise ValueError("scoped replay row record has an invalid scope identity")
+        if not isinstance(raw_positions, list):
+            raise ValueError("scoped replay row positions must be a list")
+        positions = [int(value) for value in raw_positions]
+        if positions != sorted(positions):
+            raise ValueError("scoped replay row positions must be chronological")
+        expected_digest = row_positions_digest(positions)
+        if item["row_positions_digest"] != expected_digest:
+            raise ValueError("scoped replay row-position digest is invalid")
+        normalised.append(
+            {
+                "scope_id": scope_id,
+                "row_positions": positions,
+                "row_positions_digest": expected_digest,
+            }
+        )
+    scope_ids = [str(item["scope_id"]) for item in normalised]
+    if scope_ids != sorted(scope_ids) or len(scope_ids) != len(set(scope_ids)):
+        raise ValueError("scoped replay identities must be unique and canonically ordered")
+    if not normalised:
+        return ""
+    payload = {
+        "version": REPLAY_SCOPED_POSITIONS_DIGEST_VERSION,
+        "scopes": normalised,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def scoped_replay_positions_provenance(memory: ReplayAuditMemory) -> tuple[str, str]:
+    """Return canonical scope-aware replay rows and their authoritative digest."""
+
+    manifest = memory.manifest()
+    scopes = [
+        {
+            "scope_id": str(item["domain_id"]),
+            "row_positions": [int(value) for value in item["row_positions"]],
+            "row_positions_digest": str(item["row_positions_digest"]),
+        }
+        for item in manifest["replay_domains"]
+    ]
+    if sum(len(item["row_positions"]) for item in scopes) != int(manifest["replay_size"]):
+        raise RuntimeError("replay scope provenance differs from replay-memory size")
+    text = json.dumps(scopes, sort_keys=True, separators=(",", ":"))
+    return text, replay_scoped_positions_digest(scopes)
 
 
 class InterventionExecutor:
@@ -403,6 +482,9 @@ class InterventionExecutor:
         calibration_positions = None if calibration_used is None else calibration_used.row_positions
         replay_rows = 0 if replay is None else len(replay)
         replay_positions = None if replay is None else replay.row_positions
+        replay_scoped_positions, replay_scoped_digest = (
+            ("[]", "") if replay is None else scoped_replay_positions_provenance(memory)
+        )
         record = InterventionRecord(
             sequence="-".join(evaluator.sequence),
             seed=evaluator.seed,
@@ -438,7 +520,7 @@ class InterventionExecutor:
             calibration_row_positions_digest=_positions_digest(calibration_positions),
             replay_rows=replay_rows,
             replay_row_positions=_json_positions(replay_positions),
-            replay_row_positions_digest=_positions_digest(replay_positions),
+            replay_row_positions_digest=replay_flat_positions_digest(replay_positions),
             audit_domains_checked=json.dumps(audit.domains_checked, separators=(",", ":")),
             audit_result=audit.state.value,
             audit_decisions=json.dumps(
@@ -450,12 +532,16 @@ class InterventionExecutor:
             rolled_back=not accepted,
             rejection_reason=audit.rejection_reason or "",
             wall_clock_update_seconds=elapsed,
+            replay_scoped_row_positions=replay_scoped_positions,
+            replay_scoped_row_positions_digest=replay_scoped_digest,
         )
         return InterventionOutcome(after, audit, record)
 
 
 __all__ = [
     "ACTION_ORDER",
+    "REPLAY_FLAT_POSITIONS_DIGEST_VERSION",
+    "REPLAY_SCOPED_POSITIONS_DIGEST_VERSION",
     "DeployedState",
     "EvaluatorMetadata",
     "InterventionAction",
@@ -464,5 +550,8 @@ __all__ = [
     "InterventionRecord",
     "PermittedCalibration",
     "PolicyObservation",
+    "replay_flat_positions_digest",
+    "replay_scoped_positions_digest",
+    "scoped_replay_positions_provenance",
     "write_intervention_records",
 ]

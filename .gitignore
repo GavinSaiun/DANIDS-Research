@@ -22,8 +22,13 @@ configs/datasets.local.yaml
 /study1/
 /study2/
 /study3/
+/study4/
+/logs/
 /schedules/
 /checkpoints/
 /materialized/
 /.task004-test-tmp*/
 /.task005-pytest-tmp*/
+/.task006-test-tmp*/
+/.pytest-core-artifacts-*/
+/pytest-cache-files-*/

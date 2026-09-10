@@ -20,6 +20,7 @@ from danids.adaptation.memory import (
     ReplayExemplars,
     deterministic_audit_exemplars,
     deterministic_replay_exemplars,
+    initialize_source_replay_audit_memory,
 )
 from danids.adaptation.supervision import (
     INCREMENTAL_SUPERVISION_VERSION,
@@ -50,5 +51,6 @@ __all__ = [
     "ReplayExemplars",
     "deterministic_audit_exemplars",
     "deterministic_replay_exemplars",
+    "initialize_source_replay_audit_memory",
     "write_intervention_records",
 ]
