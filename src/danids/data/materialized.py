@@ -345,6 +345,13 @@ class PartitionView:
     def row_count(self) -> int:
         return self.selection.size
 
+    def prequential_window_count(self, window_size: int) -> int:
+        if self.partition_kind is not PartitionKind.ONLINE_STREAM:
+            raise TypeError("prequential windows require an online-stream partition")
+        if window_size <= 0:
+            raise ValueError("window_size must be positive")
+        return (self.row_count + window_size - 1) // window_size
+
     def feature_column(self, index: int) -> NDArray[np.float32]:
         chosen = self.dataset.features[self.selection.start : self.selection.stop, index]
         return np.asarray(chosen, dtype=np.float32).copy()
@@ -464,6 +471,44 @@ class PartitionView:
                 partition_kind=PartitionKind.ONLINE_STREAM,
                 supervision_scope_token=scope_token,
             )
+
+    def prequential_window(self, window_size: int, window_id: int) -> PrequentialWindow:
+        """Return one fresh random-access online window for counterfactual evaluation.
+
+        The returned label gate is independent of the main stream cursor.  This is
+        intentionally bounded to one window and preserves the same raw intervals,
+        scope token, and predict-before-observe protocol as ``prequential_windows``.
+        """
+
+        if self.partition_kind is not PartitionKind.ONLINE_STREAM:
+            raise TypeError("prequential windows require an online-stream partition")
+        if window_size <= 0 or window_id < 0:
+            raise ValueError("window size must be positive and window_id non-negative")
+        start = self.selection.start + window_id * window_size
+        if start >= self.selection.stop:
+            raise IndexError("prequential window_id lies beyond the online stream")
+        stop = min(start + window_size, self.selection.stop)
+        scope_token = derive_supervision_scope_token(
+            source_sha256=self.dataset.manifest.source.sha256,
+            split_version=self.dataset.manifest.split_version,
+            row_start=self.selection.start,
+            row_stop=self.selection.stop,
+        )
+        view = PredictionView(
+            np.asarray(self.dataset.features[start:stop], dtype=np.float32).copy(),
+            self._metadata(start, stop),
+            np.arange(start, stop, dtype=np.int64),
+            self.feature_columns,
+        )
+        return PrequentialWindow(
+            window_id=window_id,
+            prediction_view=view,
+            binary_labels=np.asarray(self.dataset.binary_labels[start:stop], dtype=np.int8),
+            native_attack_labels=self._native(start, stop),
+            final_partial=(stop - start) < window_size,
+            partition_kind=PartitionKind.ONLINE_STREAM,
+            supervision_scope_token=scope_token,
+        )
 
     def health_windows(self, window_size: int) -> Iterator[PrequentialWindow]:
         """Yield label-gated validation or online windows for non-adaptive health scans."""
