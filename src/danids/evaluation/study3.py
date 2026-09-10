@@ -508,6 +508,12 @@ def _frames_equal(expected: pd.DataFrame, actual: pd.DataFrame) -> bool:
     return True
 
 
+def _load_canonical_health_dataset(path: Path) -> pd.DataFrame:
+    """Load the persisted aggregate representation used for every derivation."""
+
+    return pd.read_csv(path)
+
+
 def validate_study3_evaluation(output_dir: str | Path) -> None:
     root = Path(output_dir)
     missing = [
@@ -520,7 +526,7 @@ def validate_study3_evaluation(output_dir: str | Path) -> None:
     contract = json.loads((root / "evaluation_contract.json").read_text(encoding="utf-8"))
     if contract.get("version") != STUDY3_OUTPUT_VERSION:
         raise ValueError("Study-3 evaluation contract version differs")
-    frame = pd.read_csv(root / "study3_health_dataset.csv")
+    frame = _load_canonical_health_dataset(root / "study3_health_dataset.csv")
     summary = json.loads((root / "study3_summary.json").read_text(encoding="utf-8"))
     records = _validated_contract_runs(contract, frame)
     observed_pairs = {(record["sequence"], record["seed"]) for record in records}
@@ -604,8 +610,10 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     if output.exists():
         raise FileExistsError(f"refusing to overwrite Study-3 output: {output}")
     output.mkdir(parents=True)
-    dataset.to_csv(output / "study3_health_dataset.csv", index=False)
-    derived = compute_study3_outputs(dataset, HealthPredictorConfig(), seed=42)
+    dataset_path = output / "study3_health_dataset.csv"
+    dataset.to_csv(dataset_path, index=False)
+    canonical_dataset = _load_canonical_health_dataset(dataset_path)
+    derived = compute_study3_outputs(canonical_dataset, HealthPredictorConfig(), seed=42)
     for filename, frame in derived.items():
         frame.to_csv(output / filename, index=False)
     contract = {
@@ -626,7 +634,7 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
     )
     rotations = sorted({"-".join(run.sequence) for run in validated})
     seeds = sorted({run.seed for run in validated})
-    state_counts = dataset["health_state"].value_counts().to_dict()
+    state_counts = canonical_dataset["health_state"].value_counts().to_dict()
     observed_pairs = {(run.sequence, run.seed) for run in validated}
     complete = observed_pairs == _expected_confirmatory_pairs()
     summary = {
@@ -636,7 +644,7 @@ def evaluate_health_study3(run_dirs: list[Path], output_dir: str | Path) -> Path
         "seeds_present": seeds,
         "rotations_present": rotations,
         "expected_domain_folds": ["U", "T", "C", "B"],
-        "observed_domain_folds": sorted(dataset["current_domain"].astype(str).unique()),
+        "observed_domain_folds": sorted(canonical_dataset["current_domain"].astype(str).unique()),
         "state_counts": {
             state: int(state_counts.get(state, 0)) for state in ("SAFE", "UNCERTAIN", "HARMFUL")
         },

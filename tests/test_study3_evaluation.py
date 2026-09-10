@@ -203,6 +203,29 @@ def _validated_runs(tmp_path: Path) -> dict[str, ValidatedHealthRun]:
     return runs
 
 
+def _complete_validated_runs(tmp_path: Path) -> dict[str, ValidatedHealthRun]:
+    dataset = health_meta_dataset()
+    runs: dict[str, ValidatedHealthRun] = {}
+    for source in ("U", "T", "C", "B"):
+        source_frame = dataset.loc[dataset["source_domain"] == source].drop(columns="health_run")
+        for seed in (42, 43, 44):
+            identity = f"identity-{source}-{seed}"
+            frame = source_frame.copy().reset_index(drop=True)
+            frame["seed"] = seed
+            frame["source_run_identity"] = identity
+            name = f"run-{source}-{seed}"
+            runs[name] = ValidatedHealthRun(
+                tmp_path / name,
+                seed,
+                source,
+                ROTATIONS[source],
+                identity,
+                "contract",
+                frame,
+            )
+    return runs
+
+
 def test_aggregation_accepts_and_canonicalizes_reordered_columns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,6 +249,49 @@ def test_aggregation_accepts_and_canonicalizes_reordered_columns(
     output = evaluate_health_study3([run.path for run in runs.values()], tmp_path / "evaluation")
     aggregated = pd.read_csv(output / "study3_health_dataset.csv")
     assert tuple(aggregated.columns) == ("health_run", *canonical_columns)
+
+
+def test_complete_evaluation_derives_from_round_tripped_canonical_dataset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = _complete_validated_runs(tmp_path)
+    round_trip_sensitive = runs["run-T-42"].windows.copy()
+    round_trip_sensitive["dist_mmd2_linear_rbf"] = round_trip_sensitive["dist_mmd2_linear_rbf"].map(
+        str
+    )
+    original = runs["run-T-42"]
+    runs["run-T-42"] = ValidatedHealthRun(
+        original.path,
+        original.seed,
+        original.source_domain,
+        original.sequence,
+        original.source_identity,
+        original.contract_digest,
+        round_trip_sensitive,
+    )
+    monkeypatch.setattr(
+        study3_module,
+        "validate_health_run",
+        lambda path: runs[Path(path).name],
+    )
+    computations: list[pd.DataFrame] = []
+    compute = study3_module.compute_study3_outputs
+
+    def recording_compute(
+        frame: pd.DataFrame, config: HealthPredictorConfig, *, seed: int
+    ) -> dict[str, pd.DataFrame]:
+        computations.append(frame.copy(deep=True))
+        return compute(frame, config, seed=seed)
+
+    monkeypatch.setattr(study3_module, "compute_study3_outputs", recording_compute)
+    output = evaluate_health_study3([run.path for run in runs.values()], tmp_path / "evaluation")
+    validate_study3_evaluation(output)
+    assert len(computations) == 3
+    for frame in computations[1:]:
+        pd.testing.assert_frame_equal(computations[0], frame, check_exact=True)
+    assert pd.api.types.is_float_dtype(computations[0]["dist_mmd2_linear_rbf"])
+    summary = json.loads((output / "study3_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "complete"
 
 
 @pytest.mark.parametrize("change", ("missing", "additional"))
