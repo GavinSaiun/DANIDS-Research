@@ -13,24 +13,31 @@ from danids.config.continual import load_continual_experiment_config
 from danids.config.core import load_study4_core_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
 from danids.config.health import load_health_experiment_config
+from danids.config.policy_development import load_policy_development_config
 from danids.config.static import load_static_experiment_config
 from danids.config.study4 import load_study4_execution_config
 from danids.continual.supervision import load_or_create_supervision_schedule
 from danids.data.manifests import SplitManifest, generate_split_manifest
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
+from danids.evaluation.policy_development import evaluate_policy_development
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
 from danids.evaluation.study4 import evaluate_study4
 from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
 from danids.experiments.health import HealthSmokeLimits, run_health_experiment
+from danids.experiments.policy_development import (
+    PolicyDevelopmentSmokeLimits,
+    run_policy_development,
+)
 from danids.experiments.static import (
     SmokeLimits,
     load_or_generate_static_manifests,
     run_static_experiment,
 )
 from danids.experiments.study4 import Study4SmokeLimits, run_study4_experiment
+from danids.policy.development import RollIn
 from danids.policy.health_artifact import (
     build_health_model_artifact,
     validate_health_model_artifact,
@@ -337,6 +344,41 @@ def _evaluate_study4(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_policy_development(args: argparse.Namespace) -> int:
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_policy_development_config(args.experiment_config).with_runtime_seed(args.seed)
+    smoke = None
+    if args.smoke:
+        smoke = PolicyDevelopmentSmokeLimits(
+            later_stages=args.smoke_later_stages,
+            later_windows=args.smoke_later_windows,
+            maximum_anchors=args.smoke_maximum_anchors,
+            maximum_actions=5,
+        )
+    output = run_policy_development(
+        registry,
+        config,
+        roll_in=RollIn(args.roll_in),
+        initial_run=args.initial_run,
+        health_artifact_dir=args.health_artifact_dir,
+        manifest_dir=args.manifest_dir,
+        output_root=args.output_dir,
+        device_name=args.device,
+        smoke=smoke,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
+    return 0
+
+
+def _evaluate_policy_development(args: argparse.Namespace) -> int:
+    output = evaluate_policy_development(
+        args.run_dirs, args.output_dir, allow_smoke=args.allow_smoke
+    )
+    summary = json.loads((output / "policy_development_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -502,6 +544,36 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_study4_parser.add_argument("--allow-incomplete", action="store_true")
     evaluate_study4_parser.add_argument("--allow-smoke", action="store_true")
     evaluate_study4_parser.set_defaults(handler=_evaluate_study4)
+
+    run_policy = subparsers.add_parser(
+        "run-policy-development",
+        help="run one POLICY_DEVELOPMENT_V1 rotation/seed/roll-in unit",
+    )
+    run_policy.add_argument("--datasets-config", required=True, type=Path)
+    run_policy.add_argument("--experiment-config", required=True, type=Path)
+    run_policy.add_argument("--roll-in", required=True, choices=[value.value for value in RollIn])
+    run_policy.add_argument("--initial-run", required=True, type=Path)
+    run_policy.add_argument("--health-artifact-dir", required=True, type=Path)
+    run_policy.add_argument("--manifest-dir", required=True, type=Path)
+    run_policy.add_argument("--output-dir", required=True, type=Path)
+    run_policy.add_argument("--device", default="auto")
+    run_policy.add_argument("--seed", type=int)
+    run_policy.add_argument("--smoke", action="store_true")
+    run_policy.add_argument("--smoke-later-stages", type=int, default=1)
+    run_policy.add_argument("--smoke-later-windows", type=int, default=3)
+    run_policy.add_argument("--smoke-maximum-anchors", type=int, default=1)
+    run_policy.set_defaults(handler=_run_policy_development)
+
+    evaluate_policy = subparsers.add_parser(
+        "evaluate-policy-development",
+        help="artifact-only aggregation of POLICY_DEVELOPMENT_V1 action trials",
+    )
+    evaluate_policy.add_argument(
+        "--run-dir", dest="run_dirs", required=True, action="append", type=Path
+    )
+    evaluate_policy.add_argument("--output-dir", required=True, type=Path)
+    evaluate_policy.add_argument("--allow-smoke", action="store_true")
+    evaluate_policy.set_defaults(handler=_evaluate_policy_development)
     return parser
 
 

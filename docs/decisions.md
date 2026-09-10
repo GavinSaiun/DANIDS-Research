@@ -443,6 +443,34 @@ without revealing the boundary to the controller or inventing a terminal label r
 
 ---
 
+## D042 — POLICY_DEVELOPMENT_V1 counterfactual corpus
+
+**Date:** 2026-09-10
+
+**Old rule:** The learned DANIDS-Policy was reserved, but its prospective
+action-success evidence and leakage-safe fit/calibration grouping were not
+implemented.
+
+**New rule:** Policy development uses the five frozen QUERY_ONLY, Always-A2,
+Always-A3, Always-A4, and DANIDS-Core roll-ins. Deterministic release/even-window
+anchors branch A0--A4 from one identical incoming state and use the first fresh
+same-domain successor for evaluator-only action-success targets. The exact
+62-field policy capability excludes identities and evaluator truth. Dataset
+fingerprint plus input/successor intervals define transitive physical groups,
+which cannot cross the five-fold seed-42 fit/calibration split.
+
+**Reason:** The final action policy needs paired, counterfactual outcome evidence
+whose label timing, memory capabilities, and physical dependence are explicit
+and artifact-verifiable before any policy model or threshold is selected.
+
+**Status:** Prospectively frozen for Policy development; final policy fitting
+and `tau_success` remain deliberately unfrozen.
+
+**Affected experiments:** Study-4 policy-development corpus only. Frozen Core,
+E4 treatment semantics, and Study 1--3 outputs are unchanged.
+
+---
+
 ## Template for future decisions
 
 ### DXXX — Short decision name

@@ -1,0 +1,7 @@
+experiment_id: POLICY_DEVELOPMENT_V1_T-C-B-U_s42
+study: POLICY_DEVELOPMENT_V1
+seed: 42
+sequence: [T, C, B, U]
+core_config: configs/experiments/task006_core_u-t-c-b.yaml
+health_config: configs/experiments/task005_health_t-c-b-u.yaml
+roll_ins: [QUERY_ONLY, ALWAYS_A2, ALWAYS_A3, ALWAYS_A4, DANIDS_CORE]
