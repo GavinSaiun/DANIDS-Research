@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import danids.policy.query as query_module
 from danids.adaptation.supervision import IncrementalDelayedSupervision
 from danids.data.types import ObservedStreamEvaluation, PartitionKind, PredictionView
 from danids.policy.query import (
@@ -61,6 +62,29 @@ def test_sha_query_is_exact_label_blind_and_deterministic() -> None:
     assert first.selected_positions == tuple(sorted(first.selected_positions))
     assert set(first.selected_positions).issubset(set(_view().row_positions))
     validate_core_query_selection(first, _view())
+
+
+def test_query_recomputation_uses_bounded_exact_label_free_memo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    query_module._select_core_query_cached.cache_clear()
+    calls = 0
+    original = query_module._rank_digest
+
+    def counted(**kwargs: object) -> str:
+        nonlocal calls
+        calls += 1
+        return original(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(query_module, "_rank_digest", counted)
+    view = _view()
+    selection = select_core_query(
+        view, seed=42, opaque_scope_token="scope", window_id=0, query_ordinal=0
+    )
+    assert calls == len(view)
+    validate_core_query_selection(selection, _view())
+    assert calls == len(view)
+    assert query_module._select_core_query_cached.cache_info().maxsize == 16
 
 
 def test_query_identity_changes_ranking_without_labels() -> None:
@@ -152,6 +176,21 @@ def test_core_delayed_supervision_releases_after_next_prediction_before_evaluato
     assert supervision.available_count == 25
 
 
+def test_fresh_counterfactual_gates_share_only_immutable_payload() -> None:
+    template = _window(3, offset=300)
+    first = template.fresh_gate()
+    second = template.fresh_gate()
+
+    assert first is not second
+    assert first.prediction_view is second.prediction_view
+    first.mark_predicted(np.zeros(len(first.prediction_view)))
+    first_observed = first.observe()
+    assert second.state is WindowState.AWAITING_PREDICTION
+    assert template.state is WindowState.AWAITING_PREDICTION
+    with pytest.raises(ValueError):
+        first_observed.binary_labels[0] = 1
+
+
 def test_final_query_releases_across_scope_boundary_then_issues_closure() -> None:
     old_scope = "a" * 64
     supervision = CoreDelayedSupervision(seed=42, opaque_scope_token=old_scope)
@@ -235,6 +274,11 @@ def test_core_delayed_supervision_enforces_one_pending_and_four_queries() -> Non
     assert supervision.remaining_budget == 0
     with pytest.raises(ValueError, match="ordinal"):
         supervision.select(release_window.prediction_view, window_id=4)
+    closure = supervision.close_at_administrative_boundary(
+        release_window, activation_boundary_index=4
+    )
+    assert closure.released_label_count == 100
+    release_window.observe()
 
 
 def test_supervision_scope_token_is_deterministic_and_binds_windows() -> None:

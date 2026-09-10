@@ -13,6 +13,7 @@ import json
 import math
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -148,6 +149,12 @@ def _bounded_row_positions_digest(positions: NDArray[np.int64]) -> str:
         raise ValueError("row positions must be one-dimensional")
     if values.dtype != np.dtype(np.int64):
         values = values.astype(np.int64, copy=False)
+    if len(values) == 0:
+        return _contiguous_row_positions_digest(0, 0)
+    first_value = int(values[0])
+    stop_value = int(values[-1]) + 1
+    if _positions_are_contiguous(values, start=first_value, stop=stop_value):
+        return _contiguous_row_positions_digest(first_value, stop_value)
     previous: int | None = None
     digest = hashlib.sha256()
     digest.update(b'{"positions":[')
@@ -165,6 +172,26 @@ def _bounded_row_positions_digest(positions: NDArray[np.int64]) -> str:
             digest.update(encoded)
             first = False
             previous = int(chunk[-1])
+    digest.update(b'],"version":')
+    digest.update(json.dumps(ROW_POSITIONS_DIGEST_VERSION, separators=(",", ":")).encode("utf-8"))
+    digest.update(b"}")
+    return digest.hexdigest()
+
+
+@lru_cache(maxsize=16)
+def _contiguous_row_positions_digest(start: int, stop: int) -> str:
+    """Memoize the exact canonical digest for common immutable range selections."""
+
+    digest = hashlib.sha256()
+    digest.update(b'{"positions":[')
+    first = True
+    for chunk_start in range(start, stop, _POSITION_TEXT_CHUNK):
+        chunk_stop = min(chunk_start + _POSITION_TEXT_CHUNK, stop)
+        encoded = ",".join(str(value) for value in range(chunk_start, chunk_stop)).encode("ascii")
+        if not first:
+            digest.update(b",")
+        digest.update(encoded)
+        first = False
     digest.update(b'],"version":')
     digest.update(json.dumps(ROW_POSITIONS_DIGEST_VERSION, separators=(",", ":")).encode("utf-8"))
     digest.update(b"}")

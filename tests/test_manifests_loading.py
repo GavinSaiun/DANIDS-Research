@@ -6,9 +6,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import danids.data.manifests as manifests_module
 from danids.config.experiment import ExperimentConfig
 from danids.data.loading import InitialDomainPartitions, LaterDomainPartitions, load_partitions
-from danids.data.manifests import ManifestError, SplitManifest, generate_split_manifest
+from danids.data.manifests import (
+    ManifestError,
+    SourceFingerprintCache,
+    SplitManifest,
+    fingerprint_file,
+    generate_split_manifest,
+    verify_manifest_source,
+)
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import FeatureContract
 
@@ -120,10 +128,43 @@ def test_changed_source_invalidates_manifest(
     registry: DatasetRegistry, contract: FeatureContract, experiment: ExperimentConfig
 ) -> None:
     manifest = _manifest(registry, contract, experiment, "T", "later")
+    cache = SourceFingerprintCache()
+    verify_manifest_source(manifest, registry["T"], fingerprint_cache=cache)
     with registry["T"].path.open("a", encoding="utf-8") as handle:
         handle.write("\n")
     with pytest.raises(ManifestError, match="fingerprint"):
-        load_partitions(registry["T"], contract, manifest, window_size=6)
+        verify_manifest_source(manifest, registry["T"], fingerprint_cache=cache)
+
+
+def test_invocation_fingerprint_cache_reuses_exact_stat_and_invalidates_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "source.csv"
+    path.write_text("first", encoding="utf-8")
+    cache = SourceFingerprintCache(max_entries=2)
+    uncached = manifests_module._fingerprint_file
+    calls = 0
+
+    def counted(source: Path, size: int, modified: int):  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        return uncached(source, size, modified)
+
+    monkeypatch.setattr(manifests_module, "_fingerprint_file", counted)
+    first = fingerprint_file(path, cache=cache)
+    assert fingerprint_file(path, cache=cache) == first
+    assert calls == 1
+
+    path.write_text("second-and-different", encoding="utf-8")
+    changed = fingerprint_file(path, cache=cache)
+    assert changed.sha256 != first.sha256
+    assert calls == 2
+
+    for index in range(3):
+        extra = tmp_path / f"extra-{index}.csv"
+        extra.write_text(str(index), encoding="utf-8")
+        fingerprint_file(extra, cache=cache)
+    assert len(cache._entries) == cache.max_entries
 
 
 def test_later_loading_returns_stream_not_training_partition(

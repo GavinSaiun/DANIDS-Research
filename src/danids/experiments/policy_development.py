@@ -32,6 +32,7 @@ from danids.adaptation.memory import ReplayAuditMemory, initialize_source_replay
 from danids.config.policy_development import PolicyDevelopmentConfig
 from danids.continual.initial_state import load_study1_initial_state
 from danids.continual.supervision import row_positions_digest
+from danids.data.manifests import SourceFingerprintCache
 from danids.data.materialized import MATERIALIZER_VERSION, MaterializedDataset, materialize_dataset
 from danids.data.preprocessing import PREPROCESSOR_VERSION
 from danids.data.registry import DatasetRegistry
@@ -590,8 +591,15 @@ def run_policy_development(
     contract = discover_core_feature_contract(registry)
     if len(contract.feature_columns) != 47:
         raise ValueError("policy development requires the exact 47-feature detector contract")
+    fingerprint_cache = SourceFingerprintCache(max_entries=4)
     manifests = tuple(
-        load_or_generate_static_manifests(registry, contract, config.core, Path(manifest_dir))
+        load_or_generate_static_manifests(
+            registry,
+            contract,
+            config.core,
+            Path(manifest_dir),
+            fingerprint_cache=fingerprint_cache,
+        )
     )
     initial = load_study1_initial_state(initial_run, config.core, contract, manifests)
     frozen = validate_health_model_artifact(health_artifact_dir)
@@ -627,6 +635,7 @@ def run_policy_development(
             manifest,
             cache_root=config.health.materialization.cache_root,
             chunk_rows=config.health.materialization.csv_chunk_rows,
+            fingerprint_cache=fingerprint_cache,
         )
     source_manifest = manifests[0]
     source = datasets[source_manifest.dataset_id]
@@ -702,6 +711,7 @@ def run_policy_development(
         if smoke is not None:
             maximum_windows = min(maximum_windows, smoke.later_windows)
         last_window: Any = None
+        closed_at_final_prediction = False
         for window_id, window in enumerate(
             stream.prequential_windows(config.core.experiment.window_size)
         ):
@@ -805,10 +815,11 @@ def run_policy_development(
                         "incoming_state": before_trials,
                     }
                 )
+                successor_template = stream.prequential_window(
+                    config.core.experiment.window_size, window_id + 1
+                )
                 for action in ACTION_ORDER:
-                    successor = stream.prequential_window(
-                        config.core.experiment.window_size, window_id + 1
-                    )
+                    successor = successor_template.fresh_gate()
                     trial, detail = _branch_trial(
                         action=action,
                         projection=projection,
@@ -979,6 +990,25 @@ def run_policy_development(
                     history["accepted_model_update"] = True
                     history["last_accepted_rank"] = action.rank
 
+            # Administrative closure consumes a PREDICTED capability.  Close a
+            # fully released final scope before the offline evaluator observes
+            # that window; this does not expose current-window labels or alter
+            # the just-completed policy/action trajectory.
+            if window_id + 1 == maximum_windows and not supervision.pending_count:
+                closure = supervision.close_at_administrative_boundary(
+                    window, activation_boundary_index=global_index
+                )
+                if allocation.release_count:
+                    activation = allocation.activate_historical(
+                        memory,
+                        deployed,
+                        closure=closure,
+                        activation_window=global_index,
+                        device=device,
+                    )
+                    audit_references[activation.scope_id] = activation.audit_reference
+                closed_at_final_prediction = True
+
             observed = window.observe()
             assessment, _, _ = evaluate_health_window(
                 observed.binary_labels,
@@ -1010,19 +1040,8 @@ def run_policy_development(
             raise RuntimeError("policy-development domain yielded no online windows")
         if supervision.pending_count:
             prior = (supervision, allocation)
-        else:
-            closure = supervision.close_at_administrative_boundary(
-                last_window, activation_boundary_index=global_index - 1
-            )
-            if allocation.release_count:
-                activation = allocation.activate_historical(
-                    memory,
-                    deployed,
-                    closure=closure,
-                    activation_window=global_index - 1,
-                    device=device,
-                )
-                audit_references[activation.scope_id] = activation.audit_reference
+        elif not closed_at_final_prediction:
+            raise RuntimeError("fully released scope was not closed at its final prediction")
 
     if not trials:
         raise RuntimeError("policy-development unit produced no trial anchors")

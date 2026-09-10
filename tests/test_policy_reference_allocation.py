@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 import torch
 
+import danids.policy.references as references_module
 from danids.adaptation.actions import DeployedState, InterventionOutcome
 from danids.adaptation.audit import AuditGuard
 from danids.adaptation.memory import AuditBatch, ReplayAuditMemory
@@ -51,6 +52,19 @@ from danids.policy.references import (
 from danids.streaming.prequential import PrequentialWindow
 
 FEATURES = ("f0", "f1", "f2")
+
+
+def test_contiguous_position_digest_memo_is_exact_and_bounded() -> None:
+    references_module._contiguous_row_positions_digest.cache_clear()
+    positions = np.arange(123, 50_123, dtype=np.int64)
+    first = references_module._bounded_row_positions_digest(positions)
+    second = references_module._bounded_row_positions_digest(positions.copy())
+
+    assert first == row_positions_digest(positions)
+    assert second == first
+    info = references_module._contiguous_row_positions_digest.cache_info()
+    assert info.hits == 1
+    assert info.maxsize == 16
 
 
 def _materialized_source(

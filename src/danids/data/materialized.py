@@ -16,7 +16,12 @@ from numpy.lib.format import open_memmap
 from numpy.typing import NDArray
 
 from danids.data.loading import DataLoadingError
-from danids.data.manifests import IndexRange, SplitManifest, verify_manifest_source
+from danids.data.manifests import (
+    IndexRange,
+    SourceFingerprintCache,
+    SplitManifest,
+    verify_manifest_source,
+)
 from danids.data.registry import DatasetSpec
 from danids.data.schema import FeatureContract
 from danids.data.types import (
@@ -119,10 +124,11 @@ def materialize_dataset(
     *,
     cache_root: str | Path,
     chunk_rows: int = 100_000,
+    fingerprint_cache: SourceFingerprintCache | None = None,
 ) -> MaterializedDataset:
     """Create/reuse a fingerprinted cache without fitting any statistical state."""
 
-    verify_manifest_source(manifest, spec)
+    verify_manifest_source(manifest, spec, fingerprint_cache=fingerprint_cache)
     manifest.validate()
     if manifest.feature_columns != contract.feature_columns:
         raise DataLoadingError("manifest and requested feature contracts differ")

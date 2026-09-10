@@ -21,6 +21,7 @@ import yaml
 from danids.config.experiment import ExperimentConfig
 from danids.config.static import StaticExperimentConfig
 from danids.data.manifests import (
+    SourceFingerprintCache,
     SplitManifest,
     generate_split_manifest,
     verify_manifest_source,
@@ -138,6 +139,8 @@ def load_or_generate_static_manifests(
     contract: FeatureContract,
     config: ManifestExperimentConfig,
     directory: Path,
+    *,
+    fingerprint_cache: SourceFingerprintCache | None = None,
 ) -> list[SplitManifest]:
     """Load or create manifests, rejecting stale or semantically mismatched reuse."""
 
@@ -157,6 +160,7 @@ def load_or_generate_static_manifests(
                 split_version=config.experiment.split_version,
                 seed=config.experiment.seed,
                 splits=config.experiment.splits,
+                fingerprint_cache=fingerprint_cache,
             )
             manifest.write(path)
         mismatches: list[str] = []
@@ -174,7 +178,11 @@ def load_or_generate_static_manifests(
         if mismatches:
             raise ValueError(f"manifest {path} is incompatible: " + "; ".join(mismatches))
         if loaded_existing:
-            verify_manifest_source(manifest, registry[dataset_id])
+            verify_manifest_source(
+                manifest,
+                registry[dataset_id],
+                fingerprint_cache=fingerprint_cache,
+            )
         manifests.append(manifest)
     return manifests
 
