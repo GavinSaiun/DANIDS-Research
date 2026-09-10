@@ -1,0 +1,50 @@
+experiment_id: E3_HEALTH_T-C-B-U_s42
+study: E3
+seed: 42
+datasets:
+  sequence: [T, C, B, U]
+  split_version: task001-v1
+stream:
+  window_size: 50000
+  boundary_mode: task_free
+splits:
+  initial: {train: 0.60, validation: 0.20, holdout: 0.20}
+  later: {online: 0.80, holdout: 0.20}
+operating_envelope:
+  target_fpr: 0.001
+  delta_recall: 0.10
+  confidence_level: 0.95
+source_static_run: runs/E1_STATIC_MLP_T-C-B-U_s42
+sampling:
+  source_reference_rows: 4096
+  current_window_rows: 2048
+  domain_classifier_rows_per_group: 1024
+signals:
+  mmd_estimator: linear_rbf_source_median
+  covariance_epsilon: 1.0e-12
+  domain_classifier_c: 1.0
+  domain_classifier_max_iter: 500
+  conformal_alpha: 0.10
+predictors:
+  logistic_c: 1.0
+  logistic_max_iter: 1000
+  logistic_solver: liblinear
+  class_weight: balanced
+  boosting_estimators: 100
+  boosting_learning_rate: 0.05
+  boosting_max_depth: 2
+supervision:
+  label_budget: 100
+  label_delay_windows: 1
+feature_sets:
+  - distribution_only
+  - model_only
+  - combined_unlabelled
+  - combined_delayed
+cross_validation:
+  - leave_current_domain_out
+  - leave_transition_out
+cache_version: task005-health-cache-v1
+materialization:
+  cache_root: data/materialized
+  csv_chunk_rows: 100000
