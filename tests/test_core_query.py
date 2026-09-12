@@ -206,6 +206,7 @@ def test_final_query_releases_across_scope_boundary_then_issues_closure() -> Non
     assert provenance is not None
     assert provenance.query_window == 11
     assert provenance.release_window == 12
+    final.observe()
 
     boundary = _window(0, offset=100, scope_token="b" * 64)
     boundary.mark_predicted(np.zeros(100))
@@ -218,6 +219,9 @@ def test_final_query_releases_across_scope_boundary_then_issues_closure() -> Non
     released = supervision.release_after_prediction(boundary, prediction_index=12)
     assert released is not None
     assert tuple(int(value) for value in released.row_positions) == selection.selected_positions
+    assert supervision.available_count == supervision.used_budget == 25
+    with pytest.raises(ValueError, match="globally chronological"):
+        supervision.release_after_prediction(boundary, prediction_index=12)
     closure = supervision.close_at_administrative_boundary(
         boundary,
         activation_boundary_index=12,
@@ -231,6 +235,73 @@ def test_final_query_releases_across_scope_boundary_then_issues_closure() -> Non
     assert supervision.is_closed
     with pytest.raises(RuntimeError, match="already closed"):
         supervision.select(final.prediction_view, window_id=1)
+
+
+def test_completed_observed_scope_without_queries_closes_at_domain_end() -> None:
+    """Exercise the STATIC/no-query domain-end lifecycle used by the E4 harness."""
+
+    supervision = CoreDelayedSupervision(seed=42, opaque_scope_token="a" * 64)
+    final = _window(0, offset=0)
+    final.mark_predicted(np.zeros(100))
+    assert supervision.release_after_prediction(final, prediction_index=11) is None
+    final.observe()
+
+    closure = supervision.close_at_administrative_boundary(
+        final,
+        activation_boundary_index=11,
+    )
+
+    assert final.state is WindowState.OBSERVED
+    assert closure.successful_query_count == 0
+    assert closure.released_label_count == 0
+    assert closure.released_row_positions_digest is None
+    assert supervision.is_closed
+
+
+def test_completed_observed_scope_with_no_final_pending_query_closes_once() -> None:
+    """Exercise a queried non-STATIC scope whose last query released in-scope."""
+
+    supervision = CoreDelayedSupervision(seed=42, opaque_scope_token="a" * 64)
+    first = _window(0, offset=0)
+    first.mark_predicted(np.zeros(100))
+    assert supervision.release_after_prediction(first, prediction_index=20) is None
+    selection = supervision.select(first.prediction_view, window_id=0)
+    supervision.register_after_prediction(first, selection, prediction_index=20)
+    first.observe()
+
+    final = _window(1, offset=100)
+    final.mark_predicted(np.zeros(100))
+    released = supervision.release_after_prediction(final, prediction_index=21)
+    assert released is not None
+    final.observe()
+
+    closure = supervision.close_at_administrative_boundary(
+        final,
+        activation_boundary_index=21,
+    )
+
+    released_positions = tuple(int(value) for value in released.row_positions)
+    assert released_positions == selection.selected_positions
+    assert len(released_positions) == len(set(released_positions)) == 25
+    assert closure.successful_query_count == 1
+    assert closure.released_label_count == 25
+    assert closure.released_row_positions_digest == selection.selected_positions_digest
+    with pytest.raises(RuntimeError, match="already closed"):
+        supervision.close_at_administrative_boundary(
+            final,
+            activation_boundary_index=21,
+        )
+
+
+def test_scope_closure_still_rejects_window_before_prediction() -> None:
+    supervision = CoreDelayedSupervision(seed=42, opaque_scope_token="a" * 64)
+    unpredicted = _window(0, offset=0)
+
+    with pytest.raises(RuntimeError, match="completed prediction"):
+        supervision.close_at_administrative_boundary(
+            unpredicted,
+            activation_boundary_index=0,
+        )
 
 
 def test_historical_scope_closure_cannot_be_constructed_by_policy_callers() -> None:
