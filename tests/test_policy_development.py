@@ -14,6 +14,7 @@ from danids.evaluation.policy_development import (
     TRIAL_COLUMNS,
     PolicyDevelopmentArtifactError,
     evaluate_policy_development,
+    validate_policy_development_evaluation,
     validate_policy_development_run,
     write_policy_development_manifest,
 )
@@ -390,6 +391,23 @@ def test_valid_run_resume_and_artifact_only_aggregation(tmp_path: Path) -> None:
     summary = json.loads((output / "policy_development_summary.json").read_text())
     assert summary["final_action_models_fitted"] is False
     assert summary["tau_success_selected"] is False
+
+
+def test_policy_evaluation_contract_is_revalidated_artifact_only(tmp_path: Path) -> None:
+    runs = [
+        _run_fixture(tmp_path / f"run-{seed}", seed=seed, start=seed * 1_000)
+        for seed in range(42, 52)
+    ]
+    output = evaluate_policy_development(runs, tmp_path / "evaluation")
+    validated = validate_policy_development_evaluation(output)
+    assert len(validated.trials) == 50
+
+    leakage_path = output / "leakage_checks.json"
+    leakage = json.loads(leakage_path.read_text(encoding="utf-8"))
+    leakage["permanent_holdout_trial_count"] = 1
+    leakage_path.write_text(json.dumps(leakage), encoding="utf-8")
+    with pytest.raises(PolicyDevelopmentArtifactError, match="leakage"):
+        validate_policy_development_evaluation(output)
 
 
 @pytest.mark.parametrize(

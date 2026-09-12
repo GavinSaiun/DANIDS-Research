@@ -21,6 +21,7 @@ from danids.data.manifests import SplitManifest, generate_split_manifest
 from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
 from danids.evaluation.policy_development import evaluate_policy_development
+from danids.evaluation.policy_qualification import evaluate_policy_qualification
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
@@ -325,6 +326,7 @@ def _run_study4(args: argparse.Namespace) -> int:
         health_artifact_dir=args.health_artifact_dir,
         manifest_dir=args.manifest_dir,
         output_root=args.output_dir,
+        policy_qualification_dir=args.policy_qualification_dir,
         device_name=args.device,
         smoke=smoke,
     )
@@ -375,6 +377,13 @@ def _evaluate_policy_development(args: argparse.Namespace) -> int:
         args.run_dirs, args.output_dir, allow_smoke=args.allow_smoke
     )
     summary = json.loads((output / "policy_development_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _qualify_policy(args: argparse.Namespace) -> int:
+    output = evaluate_policy_qualification(args.evaluation_dir, args.output_dir)
+    summary = json.loads((output / "policy_qualification.json").read_text(encoding="utf-8"))
     print(json.dumps({"output_directory": str(output), **summary}, indent=2))
     return 0
 
@@ -527,6 +536,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_study4.add_argument("--health-artifact-dir", required=True, type=Path)
     run_study4.add_argument("--manifest-dir", required=True, type=Path)
     run_study4.add_argument("--output-dir", required=True, type=Path)
+    run_study4.add_argument("--policy-qualification-dir", type=Path)
     run_study4.add_argument("--device", default="auto")
     run_study4.add_argument("--smoke", action="store_true")
     run_study4.add_argument("--smoke-later-stages", type=int, default=1)
@@ -574,6 +584,14 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_policy.add_argument("--output-dir", required=True, type=Path)
     evaluate_policy.add_argument("--allow-smoke", action="store_true")
     evaluate_policy.set_defaults(handler=_evaluate_policy_development)
+
+    qualify_policy = subparsers.add_parser(
+        "qualify-policy",
+        help="artifact-only DANIDS-Policy oracle qualification gate",
+    )
+    qualify_policy.add_argument("--evaluation-dir", required=True, type=Path)
+    qualify_policy.add_argument("--output-dir", required=True, type=Path)
+    qualify_policy.set_defaults(handler=_qualify_policy)
     return parser
 
 
