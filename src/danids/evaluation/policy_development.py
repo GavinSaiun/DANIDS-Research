@@ -22,6 +22,7 @@ from danids.policy.development import (
     POLICY_SPLIT_VERSION,
     ROLL_INS,
     PolicyDevelopmentFeatures,
+    TrialTargetStatus,
     action_feasibility,
     assign_physical_components,
     binary_target,
@@ -40,6 +41,21 @@ RUN_FILES = {
     "rollin_windows.csv",
     "summary.json",
     "artifact_manifest.json",
+}
+
+EVALUATION_FILES = {
+    "action_feasibility_counts.csv",
+    "action_target_status_counts.csv",
+    "binary_fit_support.csv",
+    "candidate_resource_summary.csv",
+    "evaluation_contract.json",
+    "fit_calibration_groups.csv",
+    "leakage_checks.json",
+    "physical_component_support.csv",
+    "policy_action_trials.csv",
+    "policy_development_summary.json",
+    "rollin_distribution.csv",
+    "support_by_current_domain.csv",
 }
 
 TRIAL_METADATA_COLUMNS = (
@@ -128,6 +144,17 @@ class ValidatedPolicyDevelopmentRun:
     evidence: tuple[Mapping[str, Any], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ValidatedPolicyDevelopmentEvaluation:
+    """Canonical, artifact-only view of a Policy-development aggregation."""
+
+    path: Path
+    contract: Mapping[str, Any]
+    summary: Mapping[str, Any]
+    leakage: Mapping[str, Any]
+    trials: pd.DataFrame
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -141,6 +168,159 @@ def _load_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise PolicyDevelopmentArtifactError(f"invalid JSON artifact: {path.name}") from exc
+
+
+def validate_policy_development_evaluation(
+    evaluation_dir: str | Path,
+) -> ValidatedPolicyDevelopmentEvaluation:
+    """Validate the persisted aggregate before any downstream Policy analysis."""
+
+    root = Path(evaluation_dir).resolve()
+    observed = {item.name for item in root.iterdir() if item.is_file()}
+    if observed != EVALUATION_FILES:
+        raise PolicyDevelopmentArtifactError(
+            "policy-development evaluation file set differs: "
+            f"missing={sorted(EVALUATION_FILES - observed)}, "
+            f"unexpected={sorted(observed - EVALUATION_FILES)}"
+        )
+    contract = _load_json(root / "evaluation_contract.json")
+    summary = _load_json(root / "policy_development_summary.json")
+    leakage = _load_json(root / "leakage_checks.json")
+    if not all(isinstance(item, dict) for item in (contract, summary, leakage)):
+        raise PolicyDevelopmentArtifactError(
+            "policy-development evaluation JSON artifacts must be mappings"
+        )
+    expected_contract = {
+        "version",
+        "source_runs",
+        "source_artifact_digests",
+        "scientific_contract_digest",
+        "feature_columns",
+        "canonical_dataset_sha256",
+    }
+    if set(contract) != expected_contract or contract["version"] != POLICY_DEVELOPMENT_VERSION:
+        raise PolicyDevelopmentArtifactError("policy-development evaluation contract differs")
+    if contract["feature_columns"] != list(POLICY_DEVELOPMENT_FEATURES):
+        raise PolicyDevelopmentArtifactError("policy-development feature contract differs")
+    source_runs = contract["source_runs"]
+    source_digests = contract["source_artifact_digests"]
+    if (
+        not isinstance(source_runs, list)
+        or not source_runs
+        or len(source_runs) != len(set(source_runs))
+        or not isinstance(source_digests, dict)
+        or set(source_digests) != set(source_runs)
+        or any(not isinstance(value, str) or len(value) != 64 for value in source_digests.values())
+    ):
+        raise PolicyDevelopmentArtifactError(
+            "policy-development source-run provenance is malformed"
+        )
+    scientific_digest = contract["scientific_contract_digest"]
+    if not isinstance(scientific_digest, str) or len(scientific_digest) != 64:
+        raise PolicyDevelopmentArtifactError(
+            "policy-development scientific-contract digest is malformed"
+        )
+    csv_path = root / "policy_action_trials.csv"
+    if contract["canonical_dataset_sha256"] != _sha256(csv_path):
+        raise PolicyDevelopmentArtifactError("policy-development canonical dataset digest differs")
+    with csv_path.open("r", encoding="utf-8", newline="") as handle:
+        header = next(csv.reader(handle))
+    if len(header) != len(set(header)):
+        raise PolicyDevelopmentArtifactError(
+            "policy-development canonical dataset has duplicate columns"
+        )
+    expected_columns = (*TRIAL_COLUMNS, "physical_component", "policy_partition")
+    if tuple(header) != expected_columns:
+        raise PolicyDevelopmentArtifactError(
+            "policy-development canonical dataset column contract differs"
+        )
+    trials = pd.read_csv(csv_path)
+    if trials.empty:
+        raise PolicyDevelopmentArtifactError("policy-development canonical dataset is empty")
+    if trials.duplicated(["anchor_id", "action"]).any():
+        raise PolicyDevelopmentArtifactError(
+            "policy-development canonical dataset repeats an anchor/action trial"
+        )
+    actions = set(expected_actions())
+    if set(trials["action"].astype(str)) != actions:
+        raise PolicyDevelopmentArtifactError("policy-development action set differs")
+    sibling_action_count = trials.groupby("anchor_id")["action"].nunique()
+    sibling_trial_count = trials.groupby("anchor_id")["action"].size()
+    if (sibling_action_count != len(actions)).any() or (sibling_trial_count != len(actions)).any():
+        raise PolicyDevelopmentArtifactError(
+            "policy-development aggregate has incomplete sibling action trials"
+        )
+    sibling_components = trials.groupby("anchor_id")["physical_component"].nunique()
+    if (sibling_components != 1).any():
+        raise PolicyDevelopmentArtifactError("sibling actions cross physical components")
+    if set(trials["policy_partition"].astype(str)) - {"fit", "calibration", "excluded"}:
+        raise PolicyDevelopmentArtifactError("policy-development partition value differs")
+    partitions = trials.groupby("physical_component")["policy_partition"].nunique()
+    if (partitions != 1).any():
+        raise PolicyDevelopmentArtifactError(
+            "policy-development physical component crosses policy partitions"
+        )
+    groups = pd.read_csv(root / "fit_calibration_groups.csv", dtype=str)
+    expected_groups = (
+        trials[["physical_component", "policy_partition"]]
+        .drop_duplicates()
+        .sort_values("physical_component")
+        .reset_index(drop=True)
+        .astype(str)
+    )
+    if tuple(groups.columns) != ("physical_component", "policy_partition") or not groups.equals(
+        expected_groups
+    ):
+        raise PolicyDevelopmentArtifactError(
+            "policy-development fit/calibration group artifact differs"
+        )
+    holdout_count = int(
+        trials["permanent_holdout_used"].map(lambda value: _bool(value, "holdout")).sum()
+    )
+    expected_leakage = {
+        "physical_component_cross_split_count": 0,
+        "sibling_action_cross_group_count": 0,
+        "permanent_holdout_trial_count": holdout_count,
+        "policy_feature_count": len(POLICY_DEVELOPMENT_FEATURES),
+        "status": "passed",
+    }
+    if leakage != expected_leakage or holdout_count:
+        raise PolicyDevelopmentArtifactError(
+            "policy-development leakage-check artifact differs or reports leakage"
+        )
+    fit_target = pd.to_numeric(trials["binary_fit_target"], errors="coerce")
+    expected_targets = [
+        binary_target(TrialTargetStatus(str(value))) for value in trials["target_status"]
+    ]
+    target_matches = [
+        (expected is None and pd.isna(observed))
+        or (expected is not None and not pd.isna(observed) and int(observed) == expected)
+        for expected, observed in zip(expected_targets, fit_target, strict=True)
+    ]
+    if not all(target_matches):
+        raise PolicyDevelopmentArtifactError(
+            "policy-development aggregate binary targets differ from confirmed status"
+        )
+    expected_summary_values = {
+        "artifact_version": POLICY_DEVELOPMENT_VERSION,
+        "run_count": len(source_runs),
+        "trial_count": len(trials),
+        "anchor_count": int(trials["anchor_id"].nunique()),
+        "physical_component_count": int(trials["physical_component"].nunique()),
+        "binary_fit_trial_count": int(fit_target.notna().sum()),
+        "split_version": POLICY_SPLIT_VERSION,
+        "final_action_models_fitted": False,
+        "tau_success_selected": False,
+    }
+    if any(summary.get(key) != value for key, value in expected_summary_values.items()):
+        raise PolicyDevelopmentArtifactError("policy-development evaluation summary differs")
+    if summary.get("fit_calibration_split_status") != "available":
+        raise PolicyDevelopmentArtifactError(
+            "policy-development fit/calibration partition is unavailable"
+        )
+    if int((trials["policy_partition"] == "calibration").sum()) == 0:
+        raise PolicyDevelopmentArtifactError("policy-development calibration partition is empty")
+    return ValidatedPolicyDevelopmentEvaluation(root, contract, summary, leakage, trials)
 
 
 def _bool(value: object, name: str) -> bool:
@@ -778,10 +958,13 @@ def evaluate_policy_development(
 
 
 __all__ = [
+    "EVALUATION_FILES",
     "TRIAL_COLUMNS",
     "PolicyDevelopmentArtifactError",
+    "ValidatedPolicyDevelopmentEvaluation",
     "ValidatedPolicyDevelopmentRun",
     "evaluate_policy_development",
+    "validate_policy_development_evaluation",
     "validate_policy_development_run",
     "write_policy_development_manifest",
 ]

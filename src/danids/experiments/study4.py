@@ -39,6 +39,7 @@ from danids.data.schema import discover_core_feature_contract
 from danids.data.types import PartitionKind
 from danids.evaluation.binary import evaluate_binary
 from danids.evaluation.native import native_attack_recall_rows
+from danids.evaluation.policy_qualification import require_enabled_policy_qualification
 from danids.evaluation.study4 import (
     CORE_BUNDLE_DIRNAME,
     HEALTH_BUNDLE_DIRNAME,
@@ -314,11 +315,14 @@ def run_study4_experiment(
     health_artifact_dir: str | Path,
     manifest_dir: str | Path,
     output_root: str | Path,
+    policy_qualification_dir: str | Path | None = None,
     device_name: str = "auto",
     smoke: Study4SmokeLimits | None = None,
 ) -> Path:
     """Execute one STATIC, Always-Adapt, or frozen Core E4 treatment."""
 
+    if config.method is Study4Method.DANIDS_POLICY:
+        require_enabled_policy_qualification(policy_qualification_dir)
     config.validate()
     if smoke is not None:
         smoke.validate()
