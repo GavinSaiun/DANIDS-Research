@@ -70,7 +70,11 @@ from danids.policy.development import (
     is_trial_anchor,
     physical_outcome_key,
 )
-from danids.policy.executor import CoreMemoryIdentity, build_core_intervention_invocation
+from danids.policy.executor import (
+    CoreMemoryIdentity,
+    build_core_intervention_invocation,
+    decision_local_query_selection,
+)
 from danids.policy.health_artifact import (
     POLICY_HEALTH_FEATURE_CONTRACT_DIGEST,
     POLICY_HEALTH_FEATURES,
@@ -855,7 +859,7 @@ def run_policy_development(
                 raise RuntimeError("counterfactual branches mutated the roll-in trajectory")
 
             actual_outcomes: list[InterventionOutcome] = []
-            selection: CoreQuerySelection | None = None
+            window_query_selection: CoreQuerySelection | None = None
             if roll_in is RollIn.DANIDS_CORE:
                 assert controller is not None
                 core_retention = (
@@ -879,12 +883,12 @@ def run_policy_development(
                 )
                 decision = controller.observe(observation)
                 if decision.query is not None:
-                    selection = supervision.select(
+                    window_query_selection = supervision.select(
                         window.prediction_view, window_id=window.window_id
                     )
-                    controller.record_query_selection(decision, selection)
+                    controller.record_query_selection(decision, window_query_selection)
                     supervision.register_after_prediction(
-                        window, selection, prediction_index=global_index
+                        window, window_query_selection, prediction_index=global_index
                     )
                 current = decision
                 while current.requires_feedback:
@@ -894,7 +898,9 @@ def run_policy_development(
                     invocation = build_core_intervention_invocation(
                         observation,
                         current,
-                        query_selection=selection,
+                        query_selection=decision_local_query_selection(
+                            current, window_query_selection
+                        ),
                         target=current_target,
                         memory=memory,
                     )
@@ -932,11 +938,11 @@ def run_policy_development(
                     and supervision.query_count < 4
                     and supervision.remaining_budget >= 25
                 ):
-                    selection = supervision.select(
+                    window_query_selection = supervision.select(
                         window.prediction_view, window_id=window.window_id
                     )
                     supervision.register_after_prediction(
-                        window, selection, prediction_index=global_index
+                        window, window_query_selection, prediction_index=global_index
                     )
                 action_by_rollin = {
                     RollIn.ALWAYS_A2: InterventionAction.HEAD_UPDATE,
@@ -1030,7 +1036,7 @@ def run_policy_development(
                     "predicted_health_state": health.predicted_state.value,
                     "evaluator_health_state": assessment.state.value,
                     "release_received": released is not None,
-                    "query_registered": selection is not None,
+                    "query_registered": window_query_selection is not None,
                     "trial_anchor": anchor,
                     "rollin_action_count": len(actual_outcomes),
                 }

@@ -463,6 +463,24 @@ def build_core_intervention_invocation(
     )
 
 
+def decision_local_query_selection(
+    decision: CoreDecision,
+    window_query_selection: CoreQuerySelection | None,
+) -> CoreQuerySelection | None:
+    """Project a registered window query onto the specific decision being executed.
+
+    Same-window escalation can replace a query-bearing A2 decision with a query-less
+    A4 fallback.  The selection remains valid window-level provenance, but it is an
+    executor capability only for the decision that issued the matching directive.
+    Full directive/selection binding remains enforced by
+    :class:`CoreInterventionInvocation`.
+    """
+
+    if type(decision) is not CoreDecision:
+        raise TypeError("Core query projection requires an exact CoreDecision")
+    return window_query_selection if decision.query is not None else None
+
+
 __all__ = [
     "CORE_EXECUTOR_BRIDGE_VERSION",
     "CORE_INTERVENTION_POLICY_INFORMATION_FIELDS",
@@ -472,4 +490,5 @@ __all__ = [
     "build_core_intervention_invocation",
     "core_intervention_policy_information",
     "core_intervention_policy_information_json",
+    "decision_local_query_selection",
 ]
