@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import csv
 import hashlib
 import json
 import platform
+import random
 import shutil
 import subprocess
 import sys
@@ -19,10 +21,12 @@ import torch
 import yaml
 
 from danids.adaptation.actions import (
+    ACTION_ORDER,
     DeployedState,
     EvaluatorMetadata,
     InterventionAction,
     InterventionExecutor,
+    InterventionOutcome,
     InterventionRecord,
     PolicyObservation,
 )
@@ -43,6 +47,7 @@ from danids.evaluation.policy_qualification import require_enabled_policy_qualif
 from danids.evaluation.study4 import (
     CORE_BUNDLE_DIRNAME,
     HEALTH_BUNDLE_DIRNAME,
+    ORACLE_FILENAME,
     STUDY4_RUN_ARTIFACT_VERSION,
     validate_study4_run,
     write_study4_run_manifest,
@@ -51,7 +56,7 @@ from danids.experiments.static import load_or_generate_static_manifests
 from danids.health.cache import DistributionSignalCache
 from danids.health.extraction import evaluate_health_window, extract_label_free_window
 from danids.health.states import HealthState, classify_health
-from danids.models.training import predict_source, resolve_device
+from danids.models.training import predict_scores, predict_source, resolve_device
 from danids.policy.allocation import ScarceLabelAllocator
 from danids.policy.artifacts import (
     AdministrativeAuditEvidence,
@@ -68,6 +73,7 @@ from danids.policy.core import (
     HistoricalAuditSnapshot,
     InterventionFeedback,
 )
+from danids.policy.development import action_feasibility, canonical_digest
 from danids.policy.executor import (
     CoreMemoryIdentity,
     build_core_intervention_invocation,
@@ -82,6 +88,13 @@ from danids.policy.health_artifact import (
     PolicyHealthVector,
     PredictedHealthState,
     validate_health_model_artifact,
+)
+from danids.policy.oracle import (
+    OFFLINE_ORACLE_VERSION,
+    ORACLE_HORIZON,
+    ORACLE_INFORMATION_POLICY,
+    OracleCandidate,
+    select_offline_oracle,
 )
 from danids.policy.query import CoreDelayedSupervision, CoreQuerySelection, QuerySelectionStatus
 from danids.policy.references import (
@@ -105,6 +118,40 @@ class Study4SmokeLimits:
             raise ValueError("Study-4 smoke later_stages must be in [1, 3]")
         if self.later_windows < 2 or self.holdout_rows <= 0:
             raise ValueError("Study-4 smoke requires >=2 windows and positive holdout rows")
+
+
+@dataclass(frozen=True, slots=True)
+class _OracleBranch:
+    candidate: OracleCandidate
+    outcome: InterventionOutcome | None
+    r1: R1ReferenceState
+
+
+@dataclass(frozen=True, slots=True)
+class _RNGSnapshot:
+    python: Any
+    numpy: Any
+    torch_cpu: torch.Tensor
+    torch_cuda: tuple[torch.Tensor, ...]
+
+
+def _capture_rng() -> _RNGSnapshot:
+    return _RNGSnapshot(
+        random.getstate(),
+        np.random.get_state(),
+        torch.random.get_rng_state().clone(),
+        tuple(state.clone() for state in torch.cuda.get_rng_state_all())
+        if torch.cuda.is_available()
+        else (),
+    )
+
+
+def _restore_rng(snapshot: _RNGSnapshot) -> None:
+    random.setstate(snapshot.python)
+    np.random.set_state(snapshot.numpy)
+    torch.random.set_rng_state(snapshot.torch_cpu)
+    if snapshot.torch_cuda:
+        torch.cuda.set_rng_state_all(list(snapshot.torch_cuda))
 
 
 def _digest(value: object) -> str:
@@ -307,6 +354,168 @@ def _audit_evidence(
     )
 
 
+def _oracle_live_state_digest(
+    deployed: DeployedState,
+    r1: R1ReferenceState,
+    supervision: CoreDelayedSupervision,
+    allocation: ScarceLabelAllocator,
+    memory: ReplayAuditMemory,
+    attempted_evidence: set[str],
+) -> str:
+    """Digest every mutable trajectory capability protected from sibling branches."""
+
+    return canonical_digest(
+        {
+            "model": deployed.model_digest,
+            "preprocessor": deployed.preprocessor_digest,
+            "threshold": deployed.threshold_digest,
+            "r1": r1.state_digest,
+            "supervision": supervision.manifest(),
+            "allocation": allocation.manifest(),
+            "memory": memory.manifest(),
+            "action_history": sorted(attempted_evidence),
+        }
+    )
+
+
+def _oracle_evidence_signature(
+    action: InterventionAction,
+    deployed: DeployedState,
+    target: ReleasedLabelBatch | None,
+    memory: ReplayAuditMemory,
+) -> str:
+    return canonical_digest(
+        {
+            "action": action.value,
+            "model": deployed.model_digest,
+            "threshold": deployed.threshold_digest,
+            "released": None if target is None else row_positions_digest(target.row_positions),
+            "memory": memory.manifest(),
+        }
+    )
+
+
+def _evaluate_oracle_branch(
+    *,
+    action: InterventionAction,
+    successor_window: Any,
+    config: Study4ExecutionConfig,
+    stage: int,
+    current_domain: str,
+    window_id: int,
+    deployed: DeployedState,
+    r1: R1ReferenceState,
+    supervision: CoreDelayedSupervision,
+    allocation: ScarceLabelAllocator,
+    memory: ReplayAuditMemory,
+    audit_references: dict[str, AuditReference],
+    attempted_evidence: set[str],
+    executor: InterventionExecutor,
+    device: torch.device,
+) -> _OracleBranch:
+    """Evaluate one action on isolated state and exactly one fresh successor gate."""
+
+    branch_deployed = copy.deepcopy(deployed)
+    branch_r1 = copy.copy(r1)
+    branch_supervision = copy.deepcopy(supervision)
+    branch_allocation = copy.deepcopy(allocation)
+    branch_memory = copy.deepcopy(memory)
+    branch_audit_references = copy.deepcopy(audit_references)
+    target = branch_allocation.current_training_batch
+    released_benign = 0 if target is None else int(np.sum(target.binary_labels == 0))
+    evidence_signature = _oracle_evidence_signature(action, deployed, target, memory)
+    feasible, feasibility_reason = action_feasibility(
+        action,
+        released_training_count=0 if target is None else len(target),
+        released_benign_support=released_benign,
+        replay_row_count=branch_memory.replay_size,
+        same_evidence_exhausted=evidence_signature in attempted_evidence,
+        a1_minimum_benign_support=config.core.actions.a1_minimum_benign_support,
+    )
+    outcome: InterventionOutcome | None = None
+    execution_succeeded = False
+    audit_admissible = False
+    audit_state = "INFEASIBLE"
+    if feasible:
+        action_target = None if action is InterventionAction.NO_OP else target
+        outcome = executor.attempt(
+            action,
+            branch_deployed,
+            PolicyObservation.from_mapping(
+                {"offline_oracle_counterfactual": True},
+                remaining_label_budget=branch_supervision.remaining_budget,
+            ),
+            EvaluatorMetadata(
+                config.sequence,
+                config.seed,
+                stage,
+                current_domain,
+                window_id,
+            ),
+            target=action_target,
+            calibration=action_target if action is InterventionAction.RECALIBRATE else None,
+            memory=branch_memory,
+            audit_references=branch_audit_references,
+            device=device,
+            seed=config.seed,
+            labels_requested=0,
+        )
+        execution_succeeded = not outcome.record.rejection_reason.startswith(
+            "action failed safely:"
+        )
+        audit_admissible = execution_succeeded and outcome.audit.accepted
+        audit_state = outcome.audit.state.value
+        branch_deployed = outcome.deployed_state
+        branch_r1 = advance_r1_after_intervention(branch_r1, outcome, device=device)
+
+    successor_scores = predict_scores(
+        branch_deployed.model,
+        branch_deployed.preprocessor,
+        successor_window.prediction_view,
+        device=device,
+    )
+    successor_window.mark_predicted(successor_scores)
+    successor_observed = successor_window.observe()
+    successor_assessment, _, _ = evaluate_health_window(
+        successor_observed.binary_labels,
+        successor_scores,
+        threshold=branch_deployed.threshold.threshold,
+        reference=branch_r1.reference,
+        config=config.health,
+    )
+    target_rows = 0 if outcome is None else int(outcome.record.target_rows)
+    replay_rows = 0 if outcome is None else int(outcome.record.replay_rows)
+    candidate = OracleCandidate(
+        action=action,
+        feasible=feasible,
+        feasibility_reason=feasibility_reason,
+        execution_succeeded=execution_succeeded,
+        audit_admissible=audit_admissible,
+        audit_state=audit_state,
+        successor_evaluator_state=successor_assessment.state.value,
+        confirmed_success=(
+            feasible
+            and execution_succeeded
+            and audit_admissible
+            and successor_assessment.state is HealthState.SAFE
+        ),
+        optimizer_steps=0 if outcome is None else int(outcome.record.optimizer_steps),
+        target_rows=target_rows,
+        replay_rows=replay_rows,
+        rows_consumed=target_rows + replay_rows,
+        incoming_model_digest=deployed.model_digest,
+        deployed_model_digest=branch_deployed.model_digest,
+        deployed_threshold_digest=branch_deployed.threshold_digest,
+        deployed_r1_digest=branch_r1.state_digest,
+        successor_window_id=int(successor_window.window_id),
+        successor_row_start=int(successor_observed.row_positions[0]),
+        successor_row_stop=int(successor_observed.row_positions[-1]) + 1,
+        permanent_holdout_used=False,
+    )
+    candidate.validate()
+    return _OracleBranch(candidate, outcome, branch_r1)
+
+
 def run_study4_experiment(
     registry: DatasetRegistry,
     config: Study4ExecutionConfig,
@@ -319,7 +528,7 @@ def run_study4_experiment(
     device_name: str = "auto",
     smoke: Study4SmokeLimits | None = None,
 ) -> Path:
-    """Execute one STATIC, Always-Adapt, or frozen Core E4 treatment."""
+    """Execute one implemented chronological E4 treatment."""
 
     if config.method is Study4Method.DANIDS_POLICY:
         require_enabled_policy_qualification(policy_qualification_dir)
@@ -444,6 +653,10 @@ def run_study4_experiment(
     core_routes: list[AdministrativeWindowRoute] = []
     core_queries: list[CoreQuerySelection] = []
     core_audits: list[AdministrativeAuditEvidence] = []
+    oracle_records: list[dict[str, Any]] = []
+    oracle_selected_actions: dict[int, InterventionAction] = {}
+    oracle_decision_ids: dict[int, str] = {}
+    oracle_attempted_evidence: set[str] = set()
     scopes: list[dict[str, Any]] = []
     event_index = 0
     learned_tpr: dict[str, float | None] = {}
@@ -592,6 +805,7 @@ def run_study4_experiment(
             decisions_this_window: list[CoreDecision] = []
             feedback_this_window: list[InterventionFeedback] = []
             window_query_selection: CoreQuerySelection | None = None
+            observed: Any | None = None
 
             if config.method is Study4Method.DANIDS_CORE:
                 assert controller is not None
@@ -776,7 +990,179 @@ def run_study4_experiment(
                     intervention_records.append(outcome.record)
                     accepted_this_window = outcome.record.accepted
 
-            observed = window.observe()
+            elif config.method is Study4Method.OFFLINE_ORACLE:
+                # Oracle receives exactly the label-blind D040 schedule.  A query
+                # registered now remains unavailable to every current branch until
+                # the next global prediction.
+                if (
+                    not supervision.pending_count
+                    and supervision.query_count < 4
+                    and supervision.remaining_budget >= 25
+                ):
+                    window_query_selection = supervision.select(
+                        window.prediction_view, window_id=window.window_id
+                    )
+                    supervision.register_after_prediction(
+                        window, window_query_selection, prediction_index=global_index
+                    )
+                    query_events.append(
+                        {
+                            "prediction_index": global_index,
+                            "selection": window_query_selection.to_dict(),
+                        }
+                    )
+
+                # This is the intentional non-deployable capability boundary: the
+                # current truth becomes evaluator-visible only after prediction and
+                # after the current query is irreversibly registered.
+                observed = window.observe()
+                current_assessment, _, _ = evaluate_health_window(
+                    observed.binary_labels,
+                    extracted.scores,
+                    threshold=threshold_at_prediction,
+                    reference=window_reference,
+                    config=config.health,
+                )
+                full_window_count = stream.prequential_window_count(
+                    config.core.experiment.window_size
+                )
+                processed_window_count = (
+                    full_window_count
+                    if smoke is None
+                    else min(full_window_count, smoke.later_windows)
+                )
+                if window_id + 1 < processed_window_count:
+                    state_before = _oracle_live_state_digest(
+                        deployed,
+                        r1,
+                        supervision,
+                        allocation,
+                        memory,
+                        oracle_attempted_evidence,
+                    )
+                    rng_before = _capture_rng()
+                    branches: list[_OracleBranch] = []
+                    try:
+                        successor_template = stream.prequential_window(
+                            config.core.experiment.window_size, window_id + 1
+                        )
+                        for action in ACTION_ORDER:
+                            branches.append(
+                                _evaluate_oracle_branch(
+                                    action=action,
+                                    successor_window=successor_template.fresh_gate(),
+                                    config=config,
+                                    stage=stage,
+                                    current_domain=manifest.dataset_id,
+                                    window_id=window_id,
+                                    deployed=deployed,
+                                    r1=r1,
+                                    supervision=supervision,
+                                    allocation=allocation,
+                                    memory=memory,
+                                    audit_references=audit_references,
+                                    attempted_evidence=oracle_attempted_evidence,
+                                    executor=executor,
+                                    device=device,
+                                )
+                            )
+                    finally:
+                        _restore_rng(rng_before)
+                    state_after_candidates = _oracle_live_state_digest(
+                        deployed,
+                        r1,
+                        supervision,
+                        allocation,
+                        memory,
+                        oracle_attempted_evidence,
+                    )
+                    if state_after_candidates != state_before:
+                        raise RuntimeError(
+                            "OFFLINE_ORACLE counterfactual branches mutated the trajectory"
+                        )
+                    selection = select_offline_oracle(
+                        tuple(branch.candidate for branch in branches)
+                    )
+                    selected = next(
+                        branch
+                        for branch in branches
+                        if branch.candidate.action is selection.selected_action
+                    )
+                    oracle_selected_actions[global_index] = selection.selected_action
+                    decision_id = _digest(
+                        {
+                            "oracle_version": OFFLINE_ORACLE_VERSION,
+                            "prediction_index": global_index,
+                            "incoming_state": state_before,
+                            "selected_action": selection.selected_action.value,
+                        }
+                    )
+                    oracle_decision_ids[global_index] = decision_id
+                    if selection.selected_action is not InterventionAction.NO_OP:
+                        if selected.outcome is None or not selected.outcome.record.accepted:
+                            raise RuntimeError(
+                                "Oracle selected a model-changing action without admissible audit"
+                            )
+                        target = allocation.current_training_batch
+                        oracle_attempted_evidence.add(
+                            _oracle_evidence_signature(
+                                selection.selected_action, deployed, target, memory
+                            )
+                        )
+                        old_r1 = r1
+                        deployed = selected.outcome.deployed_state
+                        r1 = selected.r1
+                        if r1 is not old_r1:
+                            references.append(r1)
+                        interventions.append(
+                            _record_intervention(
+                                global_index,
+                                decision_id,
+                                selected.outcome.record,
+                            )
+                        )
+                        intervention_records.append(selected.outcome.record)
+                        accepted_this_window = True
+                    oracle_records.append(
+                        {
+                            "prediction_index": global_index,
+                            "decision_id": decision_id,
+                            "stage": stage,
+                            "current_domain": manifest.dataset_id,
+                            "window_id": window_id,
+                            "current_evaluator_state": current_assessment.state.value,
+                            "current_truth_revealed_after_prediction": True,
+                            "query_registered_before_current_truth": (
+                                window_query_selection is not None
+                            ),
+                            "incoming_state_digest": state_before,
+                            "state_digest_after_candidates": state_after_candidates,
+                            "state_digest_after_selection": _oracle_live_state_digest(
+                                deployed,
+                                r1,
+                                supervision,
+                                allocation,
+                                memory,
+                                oracle_attempted_evidence,
+                            ),
+                            "successor_window_id": window_id + 1,
+                            "successor_row_start": selected.candidate.successor_row_start,
+                            "successor_row_stop": selected.candidate.successor_row_stop,
+                            "horizon": ORACLE_HORIZON,
+                            "candidates": [branch.candidate.to_dict() for branch in branches],
+                            "selected_action": selection.selected_action.value,
+                            "tie_break_reason": selection.tie_break_reason,
+                            "selected_optimizer_steps": selected.candidate.optimizer_steps,
+                            "selected_rows_consumed": selected.candidate.rows_consumed,
+                            "selected_confirmed_success": selected.candidate.confirmed_success,
+                            "evaluator_truth_visible": True,
+                            "non_deployable_upper_bound": True,
+                            "permanent_holdout_used_for_choice": False,
+                        }
+                    )
+
+            if observed is None:
+                observed = window.observe()
             assessment, binary, evaluator = evaluate_health_window(
                 observed.binary_labels,
                 extracted.scores,
@@ -815,7 +1201,9 @@ def run_study4_experiment(
                 "model_digest_at_prediction": incoming_model,
                 "model_digest_after_action": deployed.model_digest,
                 "accepted_update_after_prediction": accepted_this_window,
-                "evaluator_truth_revealed_after_action": True,
+                "evaluator_truth_revealed_after_action": (
+                    config.method is not Study4Method.OFFLINE_ORACLE
+                ),
                 **evaluator,
             }
             window_rows.append(row)
@@ -913,7 +1301,33 @@ def run_study4_experiment(
         for trace in core_traces
         for decision in trace.decisions
     ]
-    if config.method is not Study4Method.DANIDS_CORE:
+    if config.method is Study4Method.OFFLINE_ORACLE:
+        decisions = [
+            {
+                "prediction_index": row["prediction_index"],
+                "decision_id": oracle_decision_ids.get(
+                    int(row["prediction_index"]),
+                    _digest(
+                        {
+                            "oracle_version": OFFLINE_ORACLE_VERSION,
+                            "prediction_index": row["prediction_index"],
+                            "reason": "no_same_domain_successor",
+                        }
+                    ),
+                ),
+                "action": oracle_selected_actions.get(
+                    int(row["prediction_index"]), InterventionAction.NO_OP
+                ).value,
+                "reason": (
+                    "offline_oracle_one_step"
+                    if int(row["prediction_index"]) in oracle_selected_actions
+                    else "offline_oracle_no_same_domain_successor"
+                ),
+                "predicted_state": row["predicted_health_state"],
+            }
+            for row in window_rows
+        ]
+    elif config.method is not Study4Method.DANIDS_CORE:
         intervention_windows = {
             int(row["prediction_index"]): str(row["action_attempted"]) for row in interventions
         }
@@ -975,6 +1389,21 @@ def run_study4_experiment(
         "health_thresholds_digest": threshold_digest,
         "health_feature_contract_digest": POLICY_HEALTH_FEATURE_CONTRACT_DIGEST,
         "always_adapt_semantics": resolved["always_adapt"],
+        **(
+            {
+                "offline_oracle_semantics": {
+                    "version": OFFLINE_ORACLE_VERSION,
+                    "information_policy": ORACLE_INFORMATION_POLICY,
+                    "horizon": ORACLE_HORIZON,
+                    "action_order": [action.value for action in ACTION_ORDER],
+                    "query_schedule": "frozen_d040_label_blind",
+                    "permanent_holdout_used_for_choice": False,
+                    "non_deployable_upper_bound": True,
+                }
+            }
+            if config.method is Study4Method.OFFLINE_ORACLE
+            else {}
+        ),
     }
     commit, dirty = _git_state()
     run_provenance = {
@@ -997,6 +1426,8 @@ def run_study4_experiment(
         "torch": torch.__version__,
         "device": str(device),
         "evaluator_truth_policy_visible": False,
+        "evaluator_truth_oracle_visible": config.method is Study4Method.OFFLINE_ORACLE,
+        "oracle_non_deployable_upper_bound": config.method is Study4Method.OFFLINE_ORACLE,
         "domain_identity_policy_visible": False,
         "permanent_holdout_policy_visible": False,
     }
@@ -1045,6 +1476,19 @@ def run_study4_experiment(
         output / "decision_log.json",
         {"version": STUDY4_RUN_ARTIFACT_VERSION, "records": decisions},
     )
+    if config.method is Study4Method.OFFLINE_ORACLE:
+        _write_json(
+            output / ORACLE_FILENAME,
+            {
+                "version": OFFLINE_ORACLE_VERSION,
+                "information_policy": ORACLE_INFORMATION_POLICY,
+                "horizon": ORACLE_HORIZON,
+                "evaluator_truth_visible": True,
+                "non_deployable_upper_bound": True,
+                "permanent_holdout_used_for_choice": False,
+                "records": oracle_records,
+            },
+        )
     _write_csv(output / "intervention_log.csv", interventions)
     _write_json(
         output / "replay_audit_manifests.json",

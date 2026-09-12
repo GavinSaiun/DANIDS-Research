@@ -147,15 +147,17 @@ for API guarantees and implementation assumptions.
 **TASK-006 — Study 4 intervention and DANIDS-Core.** The package provides explicit
 A0–A4 candidate actions with rollback, replay/audit capability separation, delayed
 incremental supervision, and the prospectively frozen transparent DANIDS-Core state
-machine. The chronological E4 harness executes `STATIC`, `ALWAYS_ADAPT`, and
-`DANIDS_CORE` with write-once provenance and artifact-only aggregation. The full
-confirmatory matrix and learned DANIDS-Policy were not run or implemented. The
+machine. The chronological E4 harness executes `STATIC`, `ALWAYS_ADAPT`,
+`DANIDS_CORE`, and the non-deployable one-step `OFFLINE_ORACLE` with write-once
+provenance and artifact-only aggregation. The full confirmatory matrix was not run;
+DANIDS-Policy failed its frozen qualification gate and remains disabled. The
 `POLICY_DEVELOPMENT_V1` runner now generates isolated A0--A4 counterfactual
 action trials from five frozen roll-ins and the artifact-only evaluator reports
 physical-group-safe policy support without fitting the final policy. See
 [`docs/study4_core_policy.md`](docs/study4_core_policy.md) and
 [`docs/study4_execution_harness.md`](docs/study4_execution_harness.md), plus
-[`docs/study4_policy_development.md`](docs/study4_policy_development.md).
+[`docs/study4_policy_development.md`](docs/study4_policy_development.md) and
+[`docs/study4_policy_qualification.md`](docs/study4_policy_qualification.md).
 
 **TASK-005 — Study 3 model health.** The package now extracts leakage-safe
 window health signals from exact frozen Study-1 states, assigns Wilson-supported

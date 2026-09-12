@@ -9,6 +9,7 @@ import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from danids.adaptation.actions import PolicyObservation
+from danids.adaptation.actions import InterventionAction, PolicyObservation
 from danids.config.continual import FROZEN_ROTATIONS
 from danids.config.study4 import STUDY4_CONFIRMATORY_SEEDS, Study4Method
 from danids.continual.supervision import row_positions_digest
@@ -31,6 +32,13 @@ from danids.policy.health_artifact import (
     FrozenHealthModel,
     PolicyHealthVector,
     validate_health_model_artifact,
+)
+from danids.policy.oracle import (
+    OFFLINE_ORACLE_VERSION,
+    ORACLE_HORIZON,
+    ORACLE_INFORMATION_POLICY,
+    OracleCandidate,
+    select_offline_oracle,
 )
 from danids.policy.query import (
     CORE_QUERY_BATCH_SIZE,
@@ -58,6 +66,7 @@ NATIVE_FILENAME = "native_attack_metrics.csv"
 RESOURCE_FILENAME = "resource_metrics.json"
 SUMMARY_FILENAME = "summary.json"
 MANIFEST_FILENAME = "artifact_manifest.json"
+ORACLE_FILENAME = "oracle_decisions.json"
 
 _RUN_FILES = (
     CONFIG_FILENAME,
@@ -585,17 +594,20 @@ def _validate_interventions(
             previous_after = before
         if str(row["preprocessor_digest_before"]) != str(row["preprocessor_digest_after"]):
             raise Study4ArtifactError("Study-4 intervention changed frozen preprocessing")
-        if action in {"A2_HEAD_UPDATE", "A4_REPLAY_UPDATE"} and str(
+        if action in {"A2_HEAD_UPDATE", "A3_FULL_FINE_TUNE", "A4_REPLAY_UPDATE"} and str(
             row["threshold_digest_before"]
         ) != str(row["threshold_digest_after"]):
-            raise Study4ArtifactError("Study-4 A2/A4 changed the frozen threshold")
+            raise Study4ArtifactError("Study-4 model update changed the frozen threshold")
         target_rows = _as_int(row["target_rows"], "intervention target rows")
         if target_rows <= 0 or target_rows > 80 or target_rows % 20:
             raise Study4ArtifactError("Study-4 intervention target is not released 20-row evidence")
         if action == "A4_REPLAY_UPDATE" and _as_int(row["replay_rows"], "replay rows") <= 0:
             raise Study4ArtifactError("Study-4 A4 lacks historical replay")
-        if action == "A2_HEAD_UPDATE" and _as_int(row["replay_rows"], "replay rows") != 0:
-            raise Study4ArtifactError("Study-4 A2 consumed replay")
+        if (
+            action in {"A2_HEAD_UPDATE", "A3_FULL_FINE_TUNE"}
+            and _as_int(row["replay_rows"], "replay rows") != 0
+        ):
+            raise Study4ArtifactError("Study-4 non-replay update consumed replay")
         try:
             visible = json.loads(str(row["policy_health_information"]))
             if not isinstance(visible, dict):
@@ -732,6 +744,194 @@ class ValidatedStudy4Run:
     interventions: list[dict[str, Any]]
 
 
+def _validate_oracle_artifact(
+    payload: dict[str, Any],
+    *,
+    windows: list[dict[str, Any]],
+    decisions: list[dict[str, Any]],
+    interventions: list[dict[str, Any]],
+    queries: dict[str, Any],
+) -> None:
+    expected_top = {
+        "version",
+        "information_policy",
+        "horizon",
+        "evaluator_truth_visible",
+        "non_deployable_upper_bound",
+        "permanent_holdout_used_for_choice",
+        "records",
+    }
+    if set(payload) != expected_top or payload.get("version") != OFFLINE_ORACLE_VERSION:
+        raise Study4ArtifactError("OFFLINE_ORACLE artifact schema/version is invalid")
+    if (
+        payload.get("information_policy") != ORACLE_INFORMATION_POLICY
+        or payload.get("horizon") != ORACLE_HORIZON
+        or not _as_bool(payload.get("evaluator_truth_visible"), "Oracle evaluator visibility")
+        or not _as_bool(payload.get("non_deployable_upper_bound"), "Oracle deployment status")
+        or _as_bool(payload.get("permanent_holdout_used_for_choice"), "Oracle holdout use")
+    ):
+        raise Study4ArtifactError("OFFLINE_ORACLE information boundary is invalid")
+    records = payload.get("records")
+    if not isinstance(records, list):
+        raise Study4ArtifactError("OFFLINE_ORACLE records must be a list")
+    window_by_index = {_as_int(row["prediction_index"], "window index"): row for row in windows}
+    next_by_index: dict[int, dict[str, Any]] = {}
+    ordered = sorted(windows, key=lambda row: _as_int(row["prediction_index"], "window index"))
+    for current, successor in pairwise(ordered):
+        if (
+            str(current["current_domain"]) == str(successor["current_domain"])
+            and _as_int(successor["window_id"], "successor window")
+            == _as_int(current["window_id"], "current window") + 1
+        ):
+            next_by_index[_as_int(current["prediction_index"], "window index")] = successor
+    if len(records) != len(next_by_index):
+        raise Study4ArtifactError("OFFLINE_ORACLE must evaluate exactly every first successor")
+    decision_by_index = {
+        _as_int(row["prediction_index"], "decision index"): row for row in decisions
+    }
+    intervention_by_decision: dict[str, list[dict[str, Any]]] = {}
+    for row in interventions:
+        intervention_by_decision.setdefault(str(row["decision_id"]), []).append(row)
+    query_indexes = {
+        _as_int(event["prediction_index"], "query index")
+        for scope in queries.get("scopes", [])
+        for event in scope.get("query_events", [])
+        if isinstance(event, dict)
+    }
+    seen: set[int] = set()
+    expected_fields = {
+        "prediction_index",
+        "decision_id",
+        "stage",
+        "current_domain",
+        "window_id",
+        "current_evaluator_state",
+        "current_truth_revealed_after_prediction",
+        "query_registered_before_current_truth",
+        "incoming_state_digest",
+        "state_digest_after_candidates",
+        "state_digest_after_selection",
+        "successor_window_id",
+        "successor_row_start",
+        "successor_row_stop",
+        "horizon",
+        "candidates",
+        "selected_action",
+        "tie_break_reason",
+        "selected_optimizer_steps",
+        "selected_rows_consumed",
+        "selected_confirmed_success",
+        "evaluator_truth_visible",
+        "non_deployable_upper_bound",
+        "permanent_holdout_used_for_choice",
+    }
+    for raw_record in records:
+        if not isinstance(raw_record, dict) or set(raw_record) != expected_fields:
+            raise Study4ArtifactError("OFFLINE_ORACLE record fields differ")
+        index = _as_int(raw_record["prediction_index"], "Oracle prediction index")
+        if index in seen or index not in next_by_index:
+            raise Study4ArtifactError("OFFLINE_ORACLE decision point is duplicate or invalid")
+        seen.add(index)
+        window = window_by_index[index]
+        successor = next_by_index[index]
+        if (
+            str(raw_record["current_domain"]) != str(window["current_domain"])
+            or _as_int(raw_record["stage"], "Oracle stage") != _as_int(window["stage"], "stage")
+            or _as_int(raw_record["window_id"], "Oracle window")
+            != _as_int(window["window_id"], "window")
+            or str(raw_record["current_evaluator_state"]) != str(window["evaluator_health_state"])
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE current-window provenance differs")
+        if (
+            raw_record["horizon"] != ORACLE_HORIZON
+            or not _as_bool(
+                raw_record["current_truth_revealed_after_prediction"], "Oracle truth timing"
+            )
+            or _as_bool(raw_record["query_registered_before_current_truth"], "Oracle query timing")
+            != (index in query_indexes)
+            or not _as_bool(raw_record["evaluator_truth_visible"], "Oracle truth visibility")
+            or not _as_bool(raw_record["non_deployable_upper_bound"], "Oracle deployment status")
+            or _as_bool(raw_record["permanent_holdout_used_for_choice"], "Oracle holdout use")
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE information/timing provenance differs")
+        if raw_record["incoming_state_digest"] != raw_record["state_digest_after_candidates"]:
+            raise Study4ArtifactError("OFFLINE_ORACLE sibling branches mutated live state")
+        if (
+            _as_int(raw_record["successor_window_id"], "Oracle successor window")
+            != _as_int(successor["window_id"], "successor window")
+            or _as_int(raw_record["successor_row_start"], "Oracle successor start")
+            != _as_int(successor["row_start"], "successor start")
+            or _as_int(raw_record["successor_row_stop"], "Oracle successor stop")
+            != _as_int(successor["row_stop"], "successor stop")
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE inspected a non-first successor")
+        raw_candidates = raw_record["candidates"]
+        if not isinstance(raw_candidates, list):
+            raise Study4ArtifactError("OFFLINE_ORACLE candidates must be a list")
+        try:
+            candidates = tuple(OracleCandidate.from_mapping(item) for item in raw_candidates)
+            selected = select_offline_oracle(candidates)
+        except (TypeError, ValueError) as exc:
+            raise Study4ArtifactError(
+                f"OFFLINE_ORACLE candidate evidence is invalid: {exc}"
+            ) from exc
+        for candidate in candidates:
+            if (
+                candidate.incoming_model_digest != str(window["model_digest_at_prediction"])
+                or candidate.successor_window_id != int(successor["window_id"])
+                or candidate.successor_row_start != int(successor["row_start"])
+                or candidate.successor_row_stop != int(successor["row_stop"])
+            ):
+                raise Study4ArtifactError("OFFLINE_ORACLE candidate route/state differs")
+        if (
+            raw_record["selected_action"] != selected.selected_action.value
+            or raw_record["tie_break_reason"] != selected.tie_break_reason
+        ):
+            raise Study4ArtifactError(
+                "OFFLINE_ORACLE persisted selection differs from recomputation"
+            )
+        selected_candidate = next(
+            item for item in candidates if item.action is selected.selected_action
+        )
+        if (
+            _as_int(raw_record["selected_optimizer_steps"], "Oracle optimizer steps")
+            != selected_candidate.optimizer_steps
+            or _as_int(raw_record["selected_rows_consumed"], "Oracle rows consumed")
+            != selected_candidate.rows_consumed
+            or _as_bool(raw_record["selected_confirmed_success"], "Oracle success")
+            != selected_candidate.confirmed_success
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE selected cost/target evidence differs")
+        decision = decision_by_index.get(index)
+        if (
+            decision is None
+            or str(decision.get("decision_id")) != str(raw_record["decision_id"])
+            or str(decision.get("action")) != selected.selected_action.value
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE decision log differs from selection")
+        linked = intervention_by_decision.get(str(raw_record["decision_id"]), [])
+        if selected.selected_action is InterventionAction.NO_OP:
+            if linked:
+                raise Study4ArtifactError(
+                    "OFFLINE_ORACLE A0 unexpectedly mutated intervention state"
+                )
+        elif (
+            len(linked) != 1
+            or str(linked[0]["action_attempted"]) != selected.selected_action.value
+            or str(linked[0]["accepted"]).casefold() != "true"
+            or _as_int(linked[0]["optimizer_steps"], "Oracle intervention steps")
+            != selected_candidate.optimizer_steps
+            or _as_int(linked[0]["target_rows"], "Oracle intervention target rows")
+            + _as_int(linked[0]["replay_rows"], "Oracle intervention replay rows")
+            != selected_candidate.rows_consumed
+        ):
+            raise Study4ArtifactError("OFFLINE_ORACLE selected intervention evidence differs")
+        if str(window.get("model_digest_after_action")) != selected_candidate.deployed_model_digest:
+            raise Study4ArtifactError("OFFLINE_ORACLE selected deployment digest differs")
+    if seen != set(next_by_index):
+        raise Study4ArtifactError("OFFLINE_ORACLE record coverage differs from one-step horizon")
+
+
 def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> ValidatedStudy4Run:
     """Validate a complete E4 run using only its immutable artifact bundle."""
 
@@ -767,8 +967,18 @@ def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> Valid
         method = Study4Method(str(provenance["method"]))
     except (KeyError, ValueError) as exc:
         raise Study4ArtifactError("Study-4 method is invalid") from exc
-    if method not in {Study4Method.STATIC, Study4Method.ALWAYS_ADAPT, Study4Method.DANIDS_CORE}:
+    if method not in {
+        Study4Method.STATIC,
+        Study4Method.ALWAYS_ADAPT,
+        Study4Method.DANIDS_CORE,
+        Study4Method.OFFLINE_ORACLE,
+    }:
         raise Study4ArtifactError("Study-4 run uses an unimplemented method")
+    if method is Study4Method.OFFLINE_ORACLE:
+        if ORACLE_FILENAME not in actual_files:
+            raise Study4ArtifactError("OFFLINE_ORACLE run lacks one-step provenance")
+    elif ORACLE_FILENAME in actual_files:
+        raise Study4ArtifactError("non-Oracle Study-4 method contains Oracle provenance")
     sequence = tuple(str(value) for value in provenance["sequence"])
     seed = _as_int(provenance["seed"], "Study-4 seed")
     smoke = _as_bool(config.get("smoke"), "smoke")
@@ -800,6 +1010,11 @@ def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> Valid
         "health_thresholds_digest": provenance.get("health_thresholds_digest"),
         "health_feature_contract_digest": provenance.get("health_feature_contract_digest"),
         "always_adapt_semantics": config.get("always_adapt"),
+        **(
+            {"offline_oracle_semantics": provenance.get("offline_oracle_semantics")}
+            if method is Study4Method.OFFLINE_ORACLE
+            else {}
+        ),
     }
     contract_digest = _digest(required_contract)
     if provenance.get("scientific_contract_digest") != contract_digest:
@@ -851,6 +1066,14 @@ def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> Valid
         raise Study4ArtifactError("non-Core Study-4 method contains a Core policy bundle")
     query_counts = _validate_queries(queries, windows, partitions, method)
     intervention_result = _validate_interventions(interventions, windows, method)
+    if method is Study4Method.OFFLINE_ORACLE:
+        _validate_oracle_artifact(
+            _load_json(root / ORACLE_FILENAME),
+            windows=windows,
+            decisions=decisions,
+            interventions=interventions,
+            queries=queries,
+        )
     _validate_holdouts(
         holdouts,
         sequence=sequence,
@@ -1153,12 +1376,13 @@ def evaluate_study4(
             Study4Method.STATIC,
             Study4Method.ALWAYS_ADAPT,
             Study4Method.DANIDS_CORE,
+            Study4Method.OFFLINE_ORACLE,
         )
     }
     observed = set(keys)
     complete = observed == expected and not any(run.smoke for run in runs)
     if not allow_incomplete and not complete:
-        raise Study4ArtifactError("confirmatory Study-4 aggregation requires exactly 36 full runs")
+        raise Study4ArtifactError("confirmatory Study-4 aggregation requires exactly 48 full runs")
     if any(run.smoke for run in runs) and not allow_smoke:
         raise Study4ArtifactError("smoke runs cannot enter confirmatory Study-4 aggregation")
     output = Path(output_dir)
@@ -1250,6 +1474,7 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
             Study4Method.STATIC,
             Study4Method.ALWAYS_ADAPT,
             Study4Method.DANIDS_CORE,
+            Study4Method.OFFLINE_ORACLE,
         )
     }
     complete = keys == expected and int(summary["smoke_run_count"]) == 0
@@ -1257,7 +1482,7 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
         raise Study4ArtifactError("Study-4 evaluation completion status differs from recomputation")
     if (
         int(summary["run_count"]) != len(run_rows)
-        or int(summary["expected_confirmatory_run_count"]) != 36
+        or int(summary["expected_confirmatory_run_count"]) != 48
     ):
         raise Study4ArtifactError("Study-4 evaluation run counts differ from recomputation")
     if summary["methods_present"] != sorted({key[2] for key in keys}):
@@ -1323,6 +1548,7 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
 __all__ = [
     "CORE_BUNDLE_DIRNAME",
     "MANIFEST_FILENAME",
+    "ORACLE_FILENAME",
     "STUDY4_EVALUATION_VERSION",
     "STUDY4_RUN_ARTIFACT_VERSION",
     "Study4ArtifactError",

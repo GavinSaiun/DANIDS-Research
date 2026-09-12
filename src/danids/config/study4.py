@@ -22,7 +22,7 @@ from danids.evaluation.study1 import FROZEN_ROTATIONS
 
 
 class Study4Method(StrEnum):
-    """Implemented E4 treatments; reserved methods remain explicit but unavailable."""
+    """E4 treatments; DANIDS-Policy remains explicitly reserved and disabled."""
 
     STATIC = "STATIC"
     ALWAYS_ADAPT = "ALWAYS_ADAPT"
@@ -35,6 +35,7 @@ IMPLEMENTED_STUDY4_METHODS = (
     Study4Method.STATIC,
     Study4Method.ALWAYS_ADAPT,
     Study4Method.DANIDS_CORE,
+    Study4Method.OFFLINE_ORACLE,
 )
 STUDY4_CONFIRMATORY_SEEDS = (42, 43, 44)
 ALWAYS_ADAPT_ACTION = "A4_REPLAY_UPDATE"

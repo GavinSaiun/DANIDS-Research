@@ -308,12 +308,13 @@ def _static_bundle(root: Path) -> None:
     write_study4_run_manifest(root)
 
 
-def test_execution_configs_freeze_three_methods_and_reject_reserved_policy() -> None:
+def test_execution_configs_freeze_four_methods_and_reject_reserved_policy() -> None:
     root = Path(__file__).resolve().parents[1]
     for name, method in (
         ("task006_e4_static_u-t-c-b.yaml", Study4Method.STATIC),
         ("task006_e4_always-adapt_u-t-c-b.yaml", Study4Method.ALWAYS_ADAPT),
         ("task006_e4_core_u-t-c-b.yaml", Study4Method.DANIDS_CORE),
+        ("task006_e4_offline-oracle_u-t-c-b.yaml", Study4Method.OFFLINE_ORACLE),
     ):
         assert (
             load_study4_execution_config(root / "configs" / "experiments" / name).method is method
