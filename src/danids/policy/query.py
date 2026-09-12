@@ -394,11 +394,19 @@ class CoreDelayedSupervision:
         A scope with a final-window query closes after that query is released on
         the next globally predicted window, even though that boundary window has a
         different opaque scope.  With no final pending query, the caller may close
-        either on the last in-scope prediction or the first boundary prediction.
+        on the last completed in-scope window (before or after its offline
+        observation) or on the first boundary prediction.
         """
 
         self._require_open()
-        if boundary_window.state is not WindowState.PREDICTED:
+        # Closure is administrative accounting, not a label-access operation.
+        # OBSERVED is a monotonic successor of PREDICTED and therefore still
+        # proves that this boundary window completed prediction.  The Study-4
+        # harness closes a fully evaluated domain after its final observation,
+        # while a pending final query is closed on the next (still PREDICTED)
+        # global boundary window after release.  Accept both lifecycle points
+        # without weakening the prohibition on pre-prediction closure.
+        if boundary_window.state not in {WindowState.PREDICTED, WindowState.OBSERVED}:
             raise RuntimeError("historical scope closure requires a completed prediction")
         if type(activation_boundary_index) is not int or activation_boundary_index < 0:
             raise ValueError("historical activation boundary must be a non-negative integer")

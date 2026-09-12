@@ -733,9 +733,11 @@ def run_study4_experiment(
         supervision: CoreDelayedSupervision | None = None
         allocation: ScarceLabelAllocator | None = None
         query_events: list[dict[str, Any]] = []
+        last_window = None
         for window_id, window in enumerate(windows):
             if smoke is not None and window_id >= smoke.later_windows:
                 break
+            last_window = window
             token = window.supervision_scope_token
             assert token is not None
             if supervision is None:
@@ -1251,8 +1253,7 @@ def run_study4_experiment(
                 evaluate_holdouts(stage, "post_accept", global_index)
             global_index += 1
 
-        assert supervision is not None and allocation is not None
-        last_window = window
+        assert supervision is not None and allocation is not None and last_window is not None
         if supervision.pending_count:
             prior = (stage, manifest.dataset_id, supervision, allocation)
         else:
