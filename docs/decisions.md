@@ -471,6 +471,36 @@ E4 treatment semantics, and Study 1--3 outputs are unchanged.
 
 ---
 
+## D043 — One-step OFFLINE_ORACLE comparator
+
+**Date:** 2026-09-12
+
+**Old rule:** `OFFLINE_ORACLE` was a reserved E4 method without a frozen executable
+selection contract.
+
+**New rule:** `OFFLINE_ORACLE` is a non-deployable, one-step myopic upper bound. At
+each window having a fresh same-domain successor, it evaluates A0--A4 from exact
+isolated incoming state using only legitimately released evidence. It may observe the
+complete current-window truth, counterfactual audit outcomes, and that first successor's
+evaluator state. Confirmed SUCCESS requires feasibility, successful execution, an
+admissible audit, and a SAFE successor. Successful actions are ordered by A0--A4 rank,
+then optimizer steps, consumed target/replay rows, and lexical identity. With no SUCCESS,
+audit-admissible actions are ordered by SAFE/UNCERTAIN/HARMFUL successor severity and
+then the same costs; if none exist, A0 is selected. Queries use the frozen label-blind
+D040 schedule, budget, delay, and 20/5 allocation. Permanent holdouts and later successor
+windows are unavailable to selection.
+
+**Reason:** The frozen comparator measures the best available immediate intervention
+under the same operational capabilities without presenting evaluator access as a
+deployable controller.
+
+**Status:** Prospectively frozen for confirmatory Study 4.
+
+**Affected experiments:** Study-4 OFFLINE_ORACLE only. DANIDS-Policy remains disabled;
+Study 1--3 outputs and the other E4 treatments are unchanged.
+
+---
+
 ## Template for future decisions
 
 ### DXXX — Short decision name
