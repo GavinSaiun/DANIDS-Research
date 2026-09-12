@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -339,6 +340,21 @@ def test_static_smoke_bundle_validates_and_missing_window_is_rejected(
     _seal(root)
     with pytest.raises(Study4ArtifactError, match="incomplete or excess"):
         validate_study4_run(root, allow_smoke=True)
+
+
+def test_study4_auc_validation_accepts_only_numerical_boundary_roundoff() -> None:
+    exact = _metric_row()
+    exact["pr_auc"] = 1.0
+    study4._validate_metric_counts(exact, "exact")
+
+    roundoff = _metric_row()
+    roundoff["pr_auc"] = float(np.nextafter(1.0, np.inf))
+    study4._validate_metric_counts(roundoff, "roundoff")
+
+    invalid = _metric_row()
+    invalid["pr_auc"] = 1.000_000_001
+    with pytest.raises(Study4ArtifactError, match=r"outside \[0, 1\]"):
+        study4._validate_metric_counts(invalid, "invalid")
 
 
 def _validated(method: Study4Method, *, labels: int, unsafe: int) -> ValidatedStudy4Run:

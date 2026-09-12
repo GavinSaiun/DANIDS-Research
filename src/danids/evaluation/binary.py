@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+_UNIT_INTERVAL_ROUNDOFF_TOLERANCE = 1e-12
+
 
 @dataclass(frozen=True, slots=True)
 class BinaryMetrics:
@@ -55,7 +57,16 @@ def average_precision(labels: NDArray[np.int8], scores: NDArray[np.float64]) -> 
     precision = true_positives / (group_ends + 1)
     recall = true_positives / positives
     recall_increments = np.diff(np.r_[0.0, recall])
-    return float(np.sum(recall_increments * precision))
+    value = float(np.sum(recall_increments * precision))
+    if (
+        not np.isfinite(value)
+        or value < -_UNIT_INTERVAL_ROUNDOFF_TOLERANCE
+        or value > 1.0 + _UNIT_INTERVAL_ROUNDOFF_TOLERANCE
+    ):
+        raise ArithmeticError("average precision escaped its mathematical [0, 1] range")
+    # Average precision is mathematically bounded.  Clip only representational
+    # round-off so generated artifacts always retain that exact contract.
+    return min(1.0, max(0.0, value))
 
 
 def roc_auc(labels: NDArray[np.int8], scores: NDArray[np.float64]) -> float:

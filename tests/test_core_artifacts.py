@@ -486,6 +486,103 @@ def test_query_rows_are_recomputed_from_exact_routed_window() -> None:
         artifact_module._validate_queries(payload, windows, [route])
 
 
+def _historical_activation_case(
+    *, final_query: bool, activation_window: int
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    scope = "scope-a"
+    routes = [
+        {
+            "opaque_scope_token": scope,
+            "window_id": 0,
+            "prediction_index": 0,
+            "domain_stage": 1,
+            "row_start": 0,
+            "row_stop": 50,
+        },
+        {
+            "opaque_scope_token": scope,
+            "window_id": 1,
+            "prediction_index": 1,
+            "domain_stage": 1,
+            "row_start": 50,
+            "row_stop": 100,
+        },
+        {
+            "opaque_scope_token": "scope-b",
+            "window_id": 0,
+            "prediction_index": 2,
+            "domain_stage": 2,
+            "row_start": 100,
+            "row_stop": 150,
+        },
+    ]
+    query_prediction = 1 if final_query else 0
+    row_start = int(routes[query_prediction]["row_start"])
+    positions = list(range(row_start, row_start + 25))
+    queries = [
+        {
+            "opaque_scope_token": scope,
+            "window_id": query_prediction,
+            "status": artifact_module.QuerySelectionStatus.SELECTED.value,
+            "selected_positions": positions,
+            "selected_positions_digest": row_positions_digest(positions),
+        }
+    ]
+    allocations = {
+        "version": artifact_module.SCARCE_LABEL_ALLOCATION_VERSION,
+        "allocations": [
+            {
+                "scope_id": scope,
+                "releases": [
+                    {
+                        "query_window": query_prediction,
+                        "release_window": query_prediction + 1,
+                        "queried_positions": positions,
+                        "queried_positions_digest": row_positions_digest(positions),
+                    }
+                ],
+                "historical_activation": {"activation_window": activation_window},
+            }
+        ],
+    }
+    return allocations, queries, routes
+
+
+@pytest.mark.parametrize(
+    ("final_query", "activation_window"),
+    [(False, 1), (True, 2)],
+)
+def test_historical_activation_accepts_both_frozen_boundary_modes(
+    monkeypatch: pytest.MonkeyPatch,
+    final_query: bool,
+    activation_window: int,
+) -> None:
+    monkeypatch.setattr(artifact_module, "validate_allocation_manifest", lambda _: None)
+    payload, queries, routes = _historical_activation_case(
+        final_query=final_query,
+        activation_window=activation_window,
+    )
+    artifact_module._validate_allocations(payload, queries, routes)
+
+
+@pytest.mark.parametrize(
+    ("final_query", "activation_window"),
+    [(False, 2), (True, 1), (True, 3)],
+)
+def test_historical_activation_rejects_wrong_boundary_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    final_query: bool,
+    activation_window: int,
+) -> None:
+    monkeypatch.setattr(artifact_module, "validate_allocation_manifest", lambda _: None)
+    payload, queries, routes = _historical_activation_case(
+        final_query=final_query,
+        activation_window=activation_window,
+    )
+    with pytest.raises(ValueError, match="pending-query boundary mode"):
+        artifact_module._validate_allocations(payload, queries, routes)
+
+
 def test_trace_dataclass_rejects_unresolved_query_state() -> None:
     initial = _learning(5_000)
     deployed = _state(initial)
