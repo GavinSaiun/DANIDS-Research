@@ -50,6 +50,7 @@ from danids.policy.query import (
 STUDY4_RUN_ARTIFACT_VERSION = "task006-e4-run-v1"
 STUDY4_EVALUATION_VERSION = "task006-e4-evaluation-v1"
 CORE_BUNDLE_DIRNAME = "core_artifacts"
+_UNIT_INTERVAL_ROUNDOFF_TOLERANCE = 1e-12
 HEALTH_BUNDLE_DIRNAME = "health_artifact"
 
 CONFIG_FILENAME = "config.resolved.yaml"
@@ -279,7 +280,9 @@ def _validate_metric_counts(row: Mapping[str, Any], context: str) -> None:
         raise Study4ArtifactError(f"{context} FPR budget ratio is inconsistent")
     for name in ("pr_auc", "roc_auc"):
         value = _as_float(row.get(name), f"{context} {name}", optional=True)
-        if value is not None and not 0.0 <= value <= 1.0:
+        if value is not None and not (
+            -_UNIT_INTERVAL_ROUNDOFF_TOLERANCE <= value <= 1.0 + _UNIT_INTERVAL_ROUNDOFF_TOLERANCE
+        ):
             raise Study4ArtifactError(f"{context} {name} lies outside [0, 1]")
 
 

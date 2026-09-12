@@ -4,7 +4,12 @@ import numpy as np
 import pytest
 import torch
 
-from danids.evaluation.binary import evaluate_binary, threshold_transfer_ratio
+import danids.evaluation.binary as binary_module
+from danids.evaluation.binary import (
+    average_precision,
+    evaluate_binary,
+    threshold_transfer_ratio,
+)
 from danids.evaluation.native import native_attack_recall_rows
 from danids.evaluation.threshold import select_fpr_threshold
 from danids.models.mlp import StaticMLP
@@ -95,6 +100,32 @@ def test_binary_operational_metrics_and_one_class_handling() -> None:
     tied = evaluate_binary(np.asarray([1, 0], dtype=np.int8), np.asarray([0.5, 0.5]), 0.5)
     assert tied.pr_auc == pytest.approx(0.5)
     assert tied.roc_auc == pytest.approx(0.5)
+
+
+def test_average_precision_preserves_exact_bounds_and_clips_only_roundoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = np.asarray([1, 1, 0], dtype=np.int8)
+    scores = np.asarray([0.9, 0.8, 0.1], dtype=np.float64)
+    assert average_precision(labels, scores) == 1.0
+
+    monkeypatch.setattr(
+        binary_module.np,
+        "sum",
+        lambda _values: np.nextafter(np.float64(1.0), np.float64(np.inf)),
+    )
+    assert average_precision(labels, scores) == 1.0
+
+
+def test_average_precision_rejects_material_internal_range_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(binary_module.np, "sum", lambda _values: 1.000_000_001)
+    with pytest.raises(ArithmeticError, match=r"\[0, 1\]"):
+        average_precision(
+            np.asarray([1, 0], dtype=np.int8),
+            np.asarray([0.9, 0.1], dtype=np.float64),
+        )
 
 
 def test_threshold_transfer_and_native_labels_are_exact() -> None:

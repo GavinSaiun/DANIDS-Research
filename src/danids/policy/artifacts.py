@@ -2015,9 +2015,35 @@ def _validate_allocations(
                 if int(item["domain_stage"]) > stage
             ]
             boundary = min(later) if later else len(routes)
-            if final_prediction + 1 != boundary or activation["activation_window"] != boundary:
+            if final_prediction + 1 != boundary:
                 raise ValueError(
                     "Core historical memory activation is not exactly at the domain boundary"
+                )
+            # With no final pending query the observed final window closes its own
+            # scope.  D041 defers activation to the next prediction only when that
+            # prediction is needed to release a query selected on the final window.
+            final_query = query_lookup.get((scope, final_prediction))
+            if final_query is None:
+                expected_activation = final_prediction
+            else:
+                final_release = next(
+                    (
+                        release
+                        for release in allocation["releases"]
+                        if int(release["query_window"]) == final_prediction
+                    ),
+                    None,
+                )
+                if final_release is None or int(final_release["release_window"]) != boundary:
+                    raise ValueError(
+                        "Core historical memory activation does not follow the final "
+                        "cross-boundary query release"
+                    )
+                expected_activation = boundary
+            if int(activation["activation_window"]) != expected_activation:
+                raise ValueError(
+                    "Core historical memory activation does not match its pending-query "
+                    "boundary mode"
                 )
     return allocations
 
