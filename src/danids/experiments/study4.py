@@ -67,7 +67,11 @@ from danids.policy.core import (
     HistoricalAuditSnapshot,
     InterventionFeedback,
 )
-from danids.policy.executor import CoreMemoryIdentity, build_core_intervention_invocation
+from danids.policy.executor import (
+    CoreMemoryIdentity,
+    build_core_intervention_invocation,
+    decision_local_query_selection,
+)
 from danids.policy.health_artifact import (
     HEALTH_MODEL_FILENAME,
     HEALTH_MODEL_MANIFEST_FILENAME,
@@ -583,7 +587,7 @@ def run_study4_experiment(
             accepted_this_window = False
             decisions_this_window: list[CoreDecision] = []
             feedback_this_window: list[InterventionFeedback] = []
-            selection_for_decision: CoreQuerySelection | None = None
+            window_query_selection: CoreQuerySelection | None = None
 
             if config.method is Study4Method.DANIDS_CORE:
                 assert controller is not None
@@ -624,18 +628,18 @@ def run_study4_experiment(
                 decision = controller.observe(observation)
                 decisions_this_window.append(decision)
                 if decision.query is not None:
-                    selection_for_decision = supervision.select(
+                    window_query_selection = supervision.select(
                         window.prediction_view, window_id=window.window_id
                     )
-                    controller.record_query_selection(decision, selection_for_decision)
+                    controller.record_query_selection(decision, window_query_selection)
                     supervision.register_after_prediction(
-                        window, selection_for_decision, prediction_index=global_index
+                        window, window_query_selection, prediction_index=global_index
                     )
-                    core_queries.append(selection_for_decision)
+                    core_queries.append(window_query_selection)
                     query_events.append(
                         {
                             "prediction_index": global_index,
-                            "selection": selection_for_decision.to_dict(),
+                            "selection": window_query_selection.to_dict(),
                         }
                     )
                 if reset_snapshot is not None and reset_result is not None:
@@ -657,7 +661,9 @@ def run_study4_experiment(
                     invocation = build_core_intervention_invocation(
                         observation,
                         current,
-                        query_selection=selection_for_decision,
+                        query_selection=decision_local_query_selection(
+                            current, window_query_selection
+                        ),
                         target=target,
                         memory=memory,
                     )
@@ -721,16 +727,16 @@ def run_study4_experiment(
                     and supervision.query_count < 4
                     and supervision.remaining_budget >= 25
                 ):
-                    selection_for_decision = supervision.select(
+                    window_query_selection = supervision.select(
                         window.prediction_view, window_id=window.window_id
                     )
                     supervision.register_after_prediction(
-                        window, selection_for_decision, prediction_index=global_index
+                        window, window_query_selection, prediction_index=global_index
                     )
                     query_events.append(
                         {
                             "prediction_index": global_index,
-                            "selection": selection_for_decision.to_dict(),
+                            "selection": window_query_selection.to_dict(),
                         }
                     )
                 target = allocation.current_training_batch

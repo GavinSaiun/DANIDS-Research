@@ -50,6 +50,7 @@ from danids.policy.executor import (
     CoreMemoryIdentity,
     build_core_intervention_invocation,
     core_intervention_policy_information,
+    decision_local_query_selection,
 )
 from danids.policy.health_artifact import (
     POLICY_HEALTH_FEATURE_CONTRACT_DIGEST,
@@ -437,6 +438,112 @@ def test_a2_and_a4_reject_generic_learning_batches_or_non_memory_values() -> Non
     assert invocation.action is InterventionAction.REPLAY_UPDATE
     assert invocation.target is target
     assert invocation.memory is memory
+
+
+def test_same_window_a2_rejection_keeps_query_provenance_out_of_a4_fallback() -> None:
+    state = _state()
+    target = _target()
+    memory = _memory()
+    observation = _observation(state, target, memory)
+    controller = DANIDSCoreController(
+        health_model_digest=observation.health_model_digest,
+        health_model_artifact_identity=observation.health_model_artifact_identity,
+    )
+
+    a2 = controller.observe(observation)
+    assert a2.action is InterventionAction.HEAD_UPDATE
+    assert a2.query is not None
+    window_query_selection = _matching_query_selection(a2)
+    assert window_query_selection is not None
+    query_events = [window_query_selection]
+    controller.record_query_selection(a2, window_query_selection)
+    state_after_query = controller.state
+
+    a2_invocation = build_core_intervention_invocation(
+        observation,
+        a2,
+        query_selection=decision_local_query_selection(a2, window_query_selection),
+        target=target,
+        memory=memory,
+    )
+    assert a2_invocation.query_selection is window_query_selection
+    assert a2_invocation.labels_requested == 25
+    assert state_after_query.supervision_query_count == observation.query_count + 1
+    assert state_after_query.remaining_label_budget == observation.remaining_label_budget - 25
+    assert state_after_query.query_pending
+    assert state_after_query.counters.query_events == 1
+    assert state_after_query.counters.labels_requested == 25
+
+    assert observation.audit_memory_digest is not None
+    audit = HistoricalAuditSnapshot(
+        expected_panels=observation.active_historical_audit_panels,
+        safe_panels=0,
+        uncertain_panels=observation.active_historical_audit_panels - 1,
+        harmful_panels=1,
+        memory_digest=observation.audit_memory_digest,
+        digest="synthetic-harmful-audit",
+    )
+    feedback = InterventionFeedback(
+        action=InterventionAction.HEAD_UPDATE,
+        accepted=False,
+        rolled_back=True,
+        audit=audit,
+        model_digest_before=observation.deployed_model_digest,
+        model_digest_after=observation.deployed_model_digest,
+        threshold_digest_before=observation.deployed_threshold_digest,
+        threshold_digest_after=observation.deployed_threshold_digest,
+        preprocessor_digest_before=observation.preprocessor_digest,
+        preprocessor_digest_after=observation.preprocessor_digest,
+        r1_reference_state_digest_before=observation.r1_reference_state_digest,
+        r1_reference_state_digest_after=observation.r1_reference_state_digest,
+        rejection_reason="synthetic audit rejection",
+    )
+    fallback = controller.record_feedback(a2, feedback)
+
+    assert fallback is not None
+    assert fallback.action is InterventionAction.REPLAY_UPDATE
+    assert fallback.query is None
+    assert controller.state.supervision_query_count == state_after_query.supervision_query_count
+    assert controller.state.remaining_label_budget == state_after_query.remaining_label_budget
+    assert controller.state.query_pending == state_after_query.query_pending
+    assert controller.state.counters.query_events == 1
+    assert controller.state.counters.labels_requested == 25
+    assert len(query_events) == 1
+
+    fallback_selection = decision_local_query_selection(fallback, window_query_selection)
+    assert fallback_selection is None
+    fallback_invocation = build_core_intervention_invocation(
+        observation,
+        fallback,
+        query_selection=fallback_selection,
+        target=target,
+        memory=memory,
+    )
+    assert fallback_invocation.labels_requested == 0
+
+    config = load_study4_intervention_config(
+        Path("configs/experiments/task006_intervention_foundation_u-t-c-b.yaml")
+    )
+    executor = InterventionExecutor(replace(config, training=replace(config.training, epochs=1)))
+    outcome = fallback_invocation.execute(
+        executor,
+        state,
+        EvaluatorMetadata(SEQUENCE, 42, 1, "T", 3),
+        audit_references={"historical-scope": AuditReference("historical-scope", 0.0)},
+        device=torch.device("cpu"),
+        seed=42,
+    )
+    assert outcome.record.action_attempted == InterventionAction.REPLAY_UPDATE.value
+    assert outcome.record.labels_requested == 0
+
+    with pytest.raises(ValueError, match="without a query directive"):
+        build_core_intervention_invocation(
+            observation,
+            fallback,
+            query_selection=window_query_selection,
+            target=target,
+            memory=memory,
+        )
 
 
 def test_bridge_binds_released_and_historical_memory_evidence_exactly() -> None:
