@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -196,13 +196,60 @@ def generate_supervision_schedule(
 
     if len(manifests) != 4 or query_count != 100:
         raise ValueError("TASK-004 requires four manifests and exactly 100 labels/domain")
-    entries: list[SupervisionEntry] = []
     sequence = tuple(item.dataset_id for item in manifests)
-    for stage, manifest in enumerate(manifests[1:], start=2):
+    later_manifests = manifests[1:]
+    for manifest in later_manifests:
         if manifest.domain_role != "later" or manifest.online_stream is None:
             raise ValueError("supervision requires later-domain online-stream manifests")
-        first_start = manifest.online_stream.start
-        first_stop = min(first_start + 50_000, manifest.online_stream.stop)
+    schedule = generate_supervision_schedule_from_identity(
+        sequence=sequence,
+        seed=seed,
+        dataset_fingerprints={item.dataset_id: item.source.sha256 for item in later_manifests},
+        online_stream_ranges={
+            item.dataset_id: (item.online_stream.start, item.online_stream.stop)
+            for item in later_manifests
+            if item.online_stream is not None
+        },
+        query_count=query_count,
+    )
+    schedule.validate(manifests)
+    return schedule
+
+
+def generate_supervision_schedule_from_identity(
+    *,
+    sequence: Sequence[str],
+    seed: int,
+    dataset_fingerprints: Mapping[str, str],
+    online_stream_ranges: Mapping[str, tuple[int, int]],
+    query_count: int = 100,
+) -> SupervisionSchedule:
+    """Reconstruct the frozen schedule from immutable manifest identity only.
+
+    This is the same label-blind calculation used by the Study-2 runner, exposed so
+    artifact-only consumers can independently verify a prospective schedule without
+    opening raw flow data.
+    """
+
+    resolved_sequence = tuple(sequence)
+    later_domains = resolved_sequence[1:]
+    if (
+        len(resolved_sequence) != 4
+        or len(set(resolved_sequence)) != 4
+        or query_count != 100
+        or set(dataset_fingerprints) != set(later_domains)
+        or set(online_stream_ranges) != set(later_domains)
+    ):
+        raise ValueError("TASK-004 schedule identity requires one four-domain sequence")
+    entries: list[SupervisionEntry] = []
+    for stage, dataset_id in enumerate(later_domains, start=2):
+        fingerprint = dataset_fingerprints[dataset_id]
+        if not isinstance(fingerprint, str) or not fingerprint:
+            raise ValueError("supervision schedule dataset fingerprint is empty")
+        first_start, stream_stop = online_stream_ranges[dataset_id]
+        if first_start < 0 or stream_stop <= first_start:
+            raise ValueError("supervision schedule online-stream range is invalid")
+        first_stop = min(first_start + 50_000, stream_stop)
         if first_stop - first_start < query_count:
             raise ValueError("later domain first window contains fewer than 100 flows")
         positions = deterministic_query_positions(
@@ -210,15 +257,15 @@ def generate_supervision_schedule(
             first_stop=first_stop,
             seed=seed,
             stage=stage,
-            dataset_id=manifest.dataset_id,
-            source_sha256=manifest.source.sha256,
+            dataset_id=dataset_id,
+            source_sha256=fingerprint,
             query_count=query_count,
         )
         entries.append(
             SupervisionEntry(
                 stage=stage,
-                dataset_id=manifest.dataset_id,
-                manifest_source_sha256=manifest.source.sha256,
+                dataset_id=dataset_id,
+                manifest_source_sha256=fingerprint,
                 stream_window_index=0,
                 chronological_positions=positions,
                 query_count=query_count,
@@ -229,11 +276,25 @@ def generate_supervision_schedule(
     schedule = SupervisionSchedule(
         version=SUPERVISION_SCHEDULE_VERSION,
         seed=seed,
-        sequence=sequence,
+        sequence=resolved_sequence,
         entries=tuple(entries),
     )
-    schedule.validate(manifests)
+    schedule.validate()
     return schedule
+
+
+def load_matching_supervision_schedule(
+    path: str | Path, expected: SupervisionSchedule
+) -> SupervisionSchedule:
+    """Load a schedule and require exact semantic and canonical-text identity."""
+
+    source = Path(path)
+    actual = SupervisionSchedule.from_json(source)
+    if actual != expected:
+        raise ValueError("persisted supervision schedule differs from canonical schedule")
+    if source.read_text(encoding="utf-8") != expected.to_json():
+        raise ValueError("persisted supervision schedule bytes differ from canonical schedule")
+    return actual
 
 
 def load_or_create_supervision_schedule(
@@ -303,6 +364,8 @@ __all__ = [
     "SupervisionSchedule",
     "deterministic_query_positions",
     "generate_supervision_schedule",
+    "generate_supervision_schedule_from_identity",
+    "load_matching_supervision_schedule",
     "load_or_create_supervision_schedule",
     "row_positions_digest",
 ]

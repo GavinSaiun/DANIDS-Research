@@ -1,0 +1,156 @@
+contract_version: task009-study5b-all-order-replay-retention-v1
+contract_sha256: 99d613455334f815a2472fe4f3c182bd402f29552bc4014013ed9e8e252e02db
+task: TASK-009
+study: Study-5B
+hypothesis: H7
+evaluator_version: task009-study5b-replay-robustness-v1
+methods: [naive_ft, er, ft_mem]
+replay_methods: [er, ft_mem]
+seeds: [42, 43, 44]
+prior_rotation: [U, T, C, B]
+extension_rotations:
+  - [T, C, B, U]
+  - [C, B, U, T]
+  - [B, U, T, C]
+all_rotations:
+  - [U, T, C, B]
+  - [T, C, B, U]
+  - [C, B, U, T]
+  - [B, U, T, C]
+task007_contract:
+  path: configs/study5/attack_ontology_v1.yaml
+  contract_version: task007-study5-ontology-estimands-v1
+  contract_sha256: f7642205ad6271c150ee47e64a7808dfb75f48c2b1d55db0df1a3e72762f368a
+task008_bundle:
+  path: study5/threat-audit-v1
+  evaluator_version: task008-study5a-threat-audit-v1
+  bundle_digest: 9e339bc3dce92a72d666a5b750e49e2bcb7c3247b184d17bbe0410153ab87fea
+
+evidence_layers:
+  prior_existing:
+    evidence_status: PRIOR_EXISTING_EVIDENCE
+    rotations:
+      - [U, T, C, B]
+    seeds: [42, 43, 44]
+    methods: [naive_ft, er, ft_mem]
+    expected_run_count: 9
+    task008_bundle: study5/threat-audit-v1
+    rerun_policy: VALIDATE_REUSE_NO_RERUN
+  prospective_extension:
+    evidence_status: PROSPECTIVE_EXTENSION_EVIDENCE
+    rotations:
+      - [T, C, B, U]
+      - [C, B, U, T]
+      - [B, U, T, C]
+    seeds: [42, 43, 44]
+    methods: [naive_ft, er, ft_mem]
+    expected_run_count: 27
+  all_order_synthesis:
+    evidence_status: PROSPECTIVE_ROBUSTNESS_EXTENSION_AFTER_SINGLE_ORDER_PRIOR_EVIDENCE
+    rotations:
+      - [U, T, C, B]
+      - [T, C, B, U]
+      - [C, B, U, T]
+      - [B, U, T, C]
+    seeds: [42, 43, 44]
+    methods: [naive_ft, er, ft_mem]
+    expected_run_count: 36
+
+execution:
+  study: E2
+  base_seed: 42
+  experiment_id_template: E2_{METHOD_TOKEN}_{ROTATION}_B100_D1_s{SEED}
+  source_run_template: E1_STATIC_MLP_{ROTATION}_s{SEED}
+  manifest_dir_template: study1-s{SEED}
+  schedule_directory: schedules/task009-study5b
+  schedule_filename_template: "{ROTATION}_s{SEED}.json"
+  device: cpu
+  workers: 1
+  stop_on_first_failure: true
+  valid_existing_output: SKIPPED_VALID
+  invalid_existing_output: QUARANTINE_AND_RESTART_WHOLE_RUN
+  optimizer_resume: false
+
+study2_reuse:
+  starting_state: MATCHING_STUDY1_ROTATION_AND_SEED
+  preprocessing: UNCHANGED_SOURCE_FITTED_47_FEATURE_STATE
+  split_version: task001-v1
+  window_size: 50000
+  boundary_mode: boundary_aware_control
+  supervision:
+    label_budget_per_later_domain: 100
+    label_delay_windows: 1
+    schedule: first_window_uniform
+    selection: FROZEN_LABEL_BLIND
+    schedules_per_rotation_seed: 1
+  adaptation:
+    frequency: ONCE_AFTER_SECOND_WINDOW_PREDICTION_PER_LATER_DOMAIN
+    optimizer: AdamW
+    learning_rate: 0.0001
+    weight_decay: 0.0001
+    batch_size: 64
+    epochs: 20
+  memory:
+    replay_per_domain: 400
+    audit_per_domain: 0
+    rules: UNCHANGED_TASK004_METHOD_RULES
+  operating_envelope:
+    target_fpr: 0.001
+    threshold: UNCHANGED_SOURCE_THRESHOLD
+  excluded_methods: [ewc]
+
+analysis:
+  ontology_contract: configs/study5/attack_ontology_v1.yaml
+  ontology_contract_version: task007-study5-ontology-estimands-v1
+  primary_family_level: MAPPED_SEMANTIC_FAMILY
+  primary_stratum: PERMANENT_HOLDOUT
+  primary_minimum_physical_support: 50
+  eligible_sequence_positions: [1, 2, 3]
+  excluded_sequence_positions: [4]
+  supporting_family_level: DATASET_QUALIFIED_NATIVE_LABEL
+  supporting_role: DESCRIPTIVE_ONLY
+  learned_events:
+    source: source_initial
+    later: post_adapt
+    excluded_from_maximum: [pre_adapt]
+    maximum_tie_break: EARLIEST_CHRONOLOGICAL_EVENT
+    final: final
+  primary_outcomes:
+    family_forgetting:
+      definition: MAX_SUPPORTED_RECALL_AT_OR_AFTER_LEARNED_MINUS_FINAL_RECALL
+      paired_effect: NAIVEFT_MINUS_REPLAY
+      positive_favours: replay
+    final_previous_domain_family_competence:
+      definition: FINAL_RECALL
+      paired_effect: REPLAY_MINUS_NAIVEFT
+      positive_favours: replay
+  secondary_outcomes:
+    backward_transfer_difference:
+      definition: REPLAY_FINAL_MINUS_LEARNED_MINUS_NAIVEFT_FINAL_MINUS_LEARNED
+      positive_favours: replay
+    forgetting_over_0_10_difference:
+      definition: INDICATOR_NAIVEFT_FORGETTING_GT_0_10_MINUS_INDICATOR_REPLAY_FORGETTING_GT_0_10
+      positive_favours: replay
+  pairing_key: [rotation, seed, previous_domain, semantic_family]
+  experimental_unit: [rotation, seed]
+  aggregation:
+    family_to_domain: UNWEIGHTED_MEAN
+    domain_to_sequence_seed: UNWEIGHTED_MEAN_ACROSS_THREE_PREVIOUS_DOMAINS
+    complete_sequence_seed_unit: ALL_THREE_PREVIOUS_DOMAINS_HAVE_PAIRED_ELIGIBLE_SUPPORT
+    sequence_seed_summary: MEDIAN
+    rotation_summary: MEDIAN_ACROSS_SEEDS
+    flow_weighting: FORBIDDEN
+    family_rows_as_replicates: FORBIDDEN
+    post_hoc_significance_tests: FORBIDDEN
+
+verdicts:
+  exact_zero: NON_POSITIVE
+  incomplete: NOT_ASSESSED_INCOMPLETE
+  method_outcome:
+    SUPPORTED: OVERALL_MEDIAN_POSITIVE_AND_EVERY_ROTATION_MEDIAN_POSITIVE
+    PARTIALLY_SUPPORTED: OVERALL_MEDIAN_POSITIVE_AND_AT_LEAST_ONE_ROTATION_MEDIAN_NON_POSITIVE
+    NOT_SUPPORTED: OVERALL_MEDIAN_NON_POSITIVE
+  h7:
+    SUPPORTED: ALL_FOUR_ALL_ORDER_METHOD_OUTCOME_SUBCLAIMS_SUPPORTED
+    NOT_SUPPORTED: ALL_FOUR_ALL_ORDER_METHOD_OUTCOME_SUBCLAIMS_NOT_SUPPORTED
+    PARTIALLY_SUPPORTED: EVERY_OTHER_COMPLETE_DATA_COMBINATION

@@ -34,6 +34,7 @@ from danids.continual.supervision import (
     DelayedLabelQueue,
     SupervisionSchedule,
     generate_supervision_schedule,
+    generate_supervision_schedule_from_identity,
     load_or_create_supervision_schedule,
     row_positions_digest,
 )
@@ -176,6 +177,27 @@ def test_schedule_is_deterministic_distinct_and_label_blind() -> None:
         assert min(entry.chronological_positions) >= 0
         assert max(entry.chronological_positions) < 50_000
         assert entry.label_return_window == 1
+
+
+def test_schedule_identity_reconstruction_matches_manifest_generation() -> None:
+    manifests = _manifests()
+    later = manifests[1:]
+    reconstructed = generate_supervision_schedule_from_identity(
+        sequence=SEQUENCE,
+        seed=42,
+        dataset_fingerprints={item.dataset_id: item.source.sha256 for item in later},
+        online_stream_ranges={
+            item.dataset_id: (item.online_stream.start, item.online_stream.stop)
+            for item in later
+            if item.online_stream is not None
+        },
+    )
+    generated = generate_supervision_schedule(manifests, seed=42)
+    assert reconstructed == generated
+    assert reconstructed.digest() == generated.digest()
+    assert [entry.chronological_positions for entry in reconstructed.entries] == [
+        entry.chronological_positions for entry in generated.entries
+    ]
 
 
 def test_schedule_changes_with_seed() -> None:
