@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -10,6 +11,10 @@ import yaml
 
 from danids.attacks import MappingStatus, load_study5_contract
 from danids.config.study5b import canonical_contract_sha256
+from danids.continual.supervision import (
+    SupervisionSchedule,
+    generate_supervision_schedule_from_identity,
+)
 from danids.evaluation import study5_sources
 from danids.evaluation.study5b import (
     ALL_ORDER_LAYER,
@@ -28,6 +33,7 @@ from danids.evaluation.study5b import (
     PROSPECTIVE_LAYER,
     SEEDS,
     SUPPORTED,
+    _canonical_extension_schedule_validation,
     _cell_verdict,
     _derive_all,
     _derive_method_dimension_summaries,
@@ -229,6 +235,35 @@ def _fake_source_identity(sequence: tuple[str, ...], seed: int) -> list[str]:
     ]
 
 
+def _canonical_schedule_fixture(
+    sequence: tuple[str, ...], seed: int
+) -> tuple[SupervisionSchedule, dict[str, object]]:
+    later = sequence[1:]
+    fingerprints = {domain: ONTOLOGY.dataset_fingerprints[domain] for domain in later}
+    ranges = {domain: (0, 100_000) for domain in later}
+    schedule = generate_supervision_schedule_from_identity(
+        sequence=sequence,
+        seed=seed,
+        dataset_fingerprints=fingerprints,
+        online_stream_ranges=ranges,
+    )
+    actual_file_sha256 = _digest(
+        {"sequence": sequence, "seed": seed, "canonical_schedule_file": True}
+    )
+    return schedule, {
+        "status": "MATCHED_DETERMINISTIC_CANONICAL_SCHEDULE",
+        "generator_version": schedule.version,
+        "dataset_fingerprints": fingerprints,
+        "online_stream_ranges": {
+            domain: {"start": start, "stop": stop} for domain, (start, stop) in ranges.items()
+        },
+        "expected_schedule_digest": schedule.digest(),
+        "actual_schedule_digest": schedule.digest(),
+        "actual_schedule_file_sha256": actual_file_sha256,
+        "canonical_schedule_equal": True,
+    }
+
+
 def _fake_source() -> dict[str, object]:
     metadata: list[dict[str, object]] = []
     for sequence in ROTATIONS:
@@ -277,6 +312,10 @@ def _fake_source() -> dict[str, object]:
             schedule_file_sha256 = _digest(
                 {"sequence": sequence, "seed": seed, "schedule_bytes": True}
             )
+            if sequence in EXTENSION_ROTATIONS:
+                schedule_file_sha256 = str(
+                    _canonical_schedule_fixture(sequence, seed)[1]["actual_schedule_file_sha256"]
+                )
             for method in METHODS:
                 adaptive_files = {
                     name: (
@@ -311,21 +350,22 @@ def _fake_source() -> dict[str, object]:
                         "source_identity": list(source_identity),
                     }
                 )
-    blocks = [
-        {
-            "sequence": list(sequence),
-            "seed": seed,
-            "methods": list(METHODS),
-            "schedule_digest": "3" * 64,
-            "schedule_file_sha256": _digest(
-                {"sequence": sequence, "seed": seed, "schedule_bytes": True}
-            ),
-            "source_identity": _fake_source_identity(sequence, seed),
-            "scientific_signature_sha256": "8" * 64,
-        }
-        for sequence in EXTENSION_ROTATIONS
-        for seed in SEEDS
-    ]
+    blocks = []
+    for sequence in EXTENSION_ROTATIONS:
+        for seed in SEEDS:
+            schedule, validation = _canonical_schedule_fixture(sequence, seed)
+            blocks.append(
+                {
+                    "sequence": list(sequence),
+                    "seed": seed,
+                    "methods": list(METHODS),
+                    "schedule_digest": schedule.digest(),
+                    "schedule_file_sha256": validation["actual_schedule_file_sha256"],
+                    "canonical_schedule_validation": validation,
+                    "source_identity": _fake_source_identity(sequence, seed),
+                    "scientific_signature_sha256": "8" * 64,
+                }
+            )
     upstream = {
         "path": "study5/threat-audit-v1",
         "evaluator_version": "task008-study5a-threat-audit-v1",
@@ -346,6 +386,120 @@ def _fake_source() -> dict[str, object]:
         metadata=metadata,
         pairing_blocks=blocks,
     )
+
+
+def _write_schedule_validation_fixture(
+    root: Path, sequence: tuple[str, ...], schedule: SupervisionSchedule
+) -> None:
+    later = sequence[1:]
+    root.mkdir(parents=True)
+    (root / "provenance.json").write_text(
+        json.dumps(
+            {
+                "dataset_fingerprints": dict(ONTOLOGY.dataset_fingerprints),
+                "manifest_partition_ranges": {
+                    domain: {"online_stream": {"start": 0, "stop": 100_000}} for domain in later
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (root / "supervision_schedule.json").write_text(schedule.to_json(), encoding="utf-8")
+
+
+def _noncanonical_schedule(schedule: SupervisionSchedule) -> SupervisionSchedule:
+    first = schedule.entries[0]
+    positions = set(first.chronological_positions)
+    replacement = next(position for position in range(50_000) if position not in positions)
+    changed = tuple(sorted((positions - {min(positions)}) | {replacement}))
+    result = replace(
+        schedule,
+        entries=(replace(first, chronological_positions=changed), *schedule.entries[1:]),
+    )
+    result.validate()
+    return result
+
+
+def test_prospective_schedule_validation_rejects_coherent_noncanonical_trio(
+    tmp_path: Path,
+) -> None:
+    sequence = EXTENSION_ROTATIONS[0]
+    seed = SEEDS[0]
+    canonical, _record = _canonical_schedule_fixture(sequence, seed)
+    noncanonical = _noncanonical_schedule(canonical)
+    assert noncanonical.digest() != canonical.digest()
+    assert (
+        noncanonical.entries[0].chronological_positions
+        != canonical.entries[0].chronological_positions
+    )
+
+    for method in METHODS:
+        root = tmp_path / method
+        _write_schedule_validation_fixture(root, sequence, noncanonical)
+        with pytest.raises(ValueError, match="deterministic canonical TASK-009 schedule"):
+            _canonical_extension_schedule_validation(root=root, sequence=sequence, seed=seed)
+    assert not (tmp_path / "h7_verdict.json").exists()
+
+
+def test_prospective_schedule_validation_accepts_canonical_trio_and_one_mismatch_fails(
+    tmp_path: Path,
+) -> None:
+    sequence = EXTENSION_ROTATIONS[1]
+    seed = SEEDS[1]
+    canonical, expected_record = _canonical_schedule_fixture(sequence, seed)
+    observed = []
+    for method in METHODS:
+        root = tmp_path / method
+        _write_schedule_validation_fixture(root, sequence, canonical)
+        observed.append(
+            _canonical_extension_schedule_validation(root=root, sequence=sequence, seed=seed)
+        )
+    for record in observed:
+        assert {
+            key: value for key, value in record.items() if key != "actual_schedule_file_sha256"
+        } == {
+            key: value
+            for key, value in expected_record.items()
+            if key != "actual_schedule_file_sha256"
+        }
+        assert len(str(record["actual_schedule_file_sha256"])) == 64
+    assert len({record["actual_schedule_file_sha256"] for record in observed}) == 1
+
+    mismatched_root = tmp_path / METHODS[-1]
+    (mismatched_root / "supervision_schedule.json").write_text(
+        _noncanonical_schedule(canonical).to_json(), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="deterministic canonical TASK-009 schedule"):
+        _canonical_extension_schedule_validation(
+            root=mismatched_root,
+            sequence=sequence,
+            seed=seed,
+        )
+
+
+def test_prior_u_order_schedule_remains_under_original_validated_contract() -> None:
+    source = _fake_source()
+    replacement_digest = "f" * 64
+    for run in source["runs"]:
+        if (
+            run["task009_role"] == "ADAPTIVE_RUN"
+            and run["sequence"] == ["U", "T", "C", "B"]
+            and run["seed"] == 42
+        ):
+            run["validated_file_digests"]["supervision_schedule.json"] = replacement_digest
+            run["validated_bundle_digest"] = _digest(run["validated_file_digests"])
+    path, raw, digest = _load_task009_contract(TASK009_CONTRACT)
+    contract_record = _task009_contract_record(
+        path=path,
+        raw=raw,
+        contract_sha256=digest,
+        ontology_path=ONTOLOGY_PATH,
+        ontology=ONTOLOGY,
+    )
+    _validate_source_artifacts_record(source, contract_record, ONTOLOGY.dataset_fingerprints)
 
 
 def test_contract_identity_and_evidence_vocab_are_exact(tmp_path: Path) -> None:

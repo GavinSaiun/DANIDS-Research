@@ -27,7 +27,11 @@ from danids.config.study5b import (
     load_study5b_contract,
 )
 from danids.continual.initial_state import ImportedInitialState, load_study1_initial_state
-from danids.continual.supervision import SupervisionSchedule, load_or_create_supervision_schedule
+from danids.continual.supervision import (
+    SupervisionSchedule,
+    load_matching_supervision_schedule,
+    load_or_create_supervision_schedule,
+)
 from danids.data.manifests import SourceFingerprintCache, SplitManifest
 from danids.data.materialized import open_existing_materialized_dataset
 from danids.data.registry import DatasetRegistry
@@ -506,7 +510,9 @@ def _prepare_unit(
 
 
 def _existing_output(
-    spec: Study5BRunSpec, static: StaticReference
+    spec: Study5BRunSpec,
+    static: StaticReference,
+    canonical_schedule: SupervisionSchedule,
 ) -> tuple[ExistingOutputState, str | None]:
     if not spec.output_path.exists():
         return ExistingOutputState.ABSENT, None
@@ -521,6 +527,18 @@ def _existing_output(
             or validated.sequence != spec.rotation
         ):
             raise Study5BLauncherError("validated output identity differs from launcher roster")
+        actual_schedule = load_matching_supervision_schedule(
+            spec.output_path / "supervision_schedule.json", canonical_schedule
+        )
+        if (
+            validated.schedule_digest != actual_schedule.digest()
+            or validated.schedule_digest != canonical_schedule.digest()
+            or (spec.output_path / "supervision_schedule.json").read_bytes()
+            != spec.schedule_path.read_bytes()
+        ):
+            raise Study5BLauncherError(
+                "validated output supervision schedule differs from canonical TASK-009 schedule"
+            )
     except Exception as exc:
         return ExistingOutputState.INVALID_EXISTING, f"{type(exc).__name__}: {exc}"
     return ExistingOutputState.SKIPPED_VALID, None
@@ -566,7 +584,7 @@ def _preflight(
     records: list[RunPreflightRecord] = []
     for spec in roster:
         unit = units[(spec.rotation, spec.seed)]
-        state, reason = _existing_output(spec, unit.static_reference)
+        state, reason = _existing_output(spec, unit.static_reference, unit.schedule)
         records.append(
             RunPreflightRecord(
                 experiment_id=spec.experiment_id,
@@ -740,7 +758,7 @@ def run_study5b_launcher(
     launched: list[RunLaunchRecord] = []
     for spec in state.roster:
         unit = state.units[(spec.rotation, spec.seed)]
-        current_state, current_reason = _existing_output(spec, unit.static_reference)
+        current_state, current_reason = _existing_output(spec, unit.static_reference, unit.schedule)
         if current_state is ExistingOutputState.SKIPPED_VALID:
             launched.append(
                 RunLaunchRecord(
@@ -762,7 +780,9 @@ def run_study5b_launcher(
                 spec=spec,
                 device_name=device_name,
             )
-            final_state, invalid_reason = _existing_output(spec, unit.static_reference)
+            final_state, invalid_reason = _existing_output(
+                spec, unit.static_reference, unit.schedule
+            )
             if final_state is not ExistingOutputState.SKIPPED_VALID:
                 reason = invalid_reason or "completed output did not validate"
                 raise Study5BLauncherError(f"{spec.experiment_id}: {reason}")

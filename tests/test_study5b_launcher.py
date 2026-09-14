@@ -18,6 +18,10 @@ from danids.config.study5b import (
     Study5BContractError,
     load_study5b_contract,
 )
+from danids.continual.supervision import (
+    SupervisionSchedule,
+    generate_supervision_schedule_from_identity,
+)
 from danids.data.registry import DatasetRegistry
 from danids.experiments import study5b
 from danids.experiments.study5b import (
@@ -177,7 +181,7 @@ def test_preflight_groups_all_27_runs_into_exactly_nine_shared_schedules(
     monkeypatch.setattr(
         study5b,
         "_existing_output",
-        lambda _spec, _static: (ExistingOutputState.ABSENT, None),
+        lambda _spec, _static, _schedule: (ExistingOutputState.ABSENT, None),
     )
     state = study5b._preflight(
         contract=contract,
@@ -202,6 +206,74 @@ def test_preflight_groups_all_27_runs_into_exactly_nine_shared_schedules(
             assert len(records) == 3
             assert len({row.schedule_path for row in records}) == 1
             assert len({row.schedule_sha256 for row in records}) == 1
+
+
+def _synthetic_schedule(sequence: tuple[str, ...], seed: int) -> SupervisionSchedule:
+    later = sequence[1:]
+    return generate_supervision_schedule_from_identity(
+        sequence=sequence,
+        seed=seed,
+        dataset_fingerprints={domain: domain.lower() * 64 for domain in later},
+        online_stream_ranges={domain: (0, 100_000) for domain in later},
+    )
+
+
+def _different_valid_schedule(schedule: SupervisionSchedule) -> SupervisionSchedule:
+    first = schedule.entries[0]
+    positions = set(first.chronological_positions)
+    replacement = next(position for position in range(50_000) if position not in positions)
+    changed_positions = tuple(sorted((positions - {min(positions)}) | {replacement}))
+    return replace(
+        schedule,
+        entries=(replace(first, chronological_positions=changed_positions), *schedule.entries[1:]),
+    )
+
+
+def test_existing_output_must_match_prepared_canonical_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contract = load_study5b_contract(_contract_path())
+    spec = build_task009_roster(contract, _paths(tmp_path))[0]
+    spec.output_path.mkdir(parents=True)
+    canonical = _synthetic_schedule(spec.rotation, spec.seed)
+    spec.schedule_path.parent.mkdir(parents=True)
+    spec.schedule_path.write_text(canonical.to_json(), encoding="utf-8")
+    noncanonical = _different_valid_schedule(canonical)
+    noncanonical.validate()
+    (spec.output_path / "supervision_schedule.json").write_text(
+        noncanonical.to_json(), encoding="utf-8"
+    )
+
+    validated = SimpleNamespace(
+        path=spec.output_path,
+        method=spec.method,
+        seed=spec.seed,
+        sequence=spec.rotation,
+        schedule_digest=noncanonical.digest(),
+    )
+    monkeypatch.setattr(study5b, "validate_continual_run", lambda _path, _static: validated)
+
+    state, reason = study5b._existing_output(spec, cast(Any, object()), canonical)
+    assert state is ExistingOutputState.INVALID_EXISTING
+    assert reason is not None and "canonical schedule" in reason
+    assert noncanonical.digest() != canonical.digest()
+    assert (
+        noncanonical.entries[0].chronological_positions
+        != canonical.entries[0].chronological_positions
+    )
+
+    quarantined = quarantine_invalid_output(spec, tmp_path / "quarantine")
+    assert not spec.output_path.exists()
+    assert SupervisionSchedule.from_json(quarantined / "supervision_schedule.json") == noncanonical
+
+    spec.output_path.mkdir(parents=True)
+    (spec.output_path / "supervision_schedule.json").write_text(
+        canonical.to_json(), encoding="utf-8"
+    )
+    validated.schedule_digest = canonical.digest()
+    state, reason = study5b._existing_output(spec, cast(Any, object()), canonical)
+    assert state is ExistingOutputState.SKIPPED_VALID
+    assert reason is None
 
 
 def test_preflight_only_mode_never_calls_the_experiment_runner(

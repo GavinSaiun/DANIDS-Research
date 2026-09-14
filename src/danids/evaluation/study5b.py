@@ -35,6 +35,10 @@ from danids.config.study5b import (
     TASK009_TASK008_BUNDLE_DIGEST,
     load_study5b_contract,
 )
+from danids.continual.supervision import (
+    generate_supervision_schedule_from_identity,
+    load_matching_supervision_schedule,
+)
 from danids.evaluation import study5 as study5a
 from danids.evaluation import study5_sources
 from danids.evaluation.study1 import validate_static_study1_run
@@ -938,6 +942,59 @@ def _validated_pipeline_contract(
     return _expected_pipeline_contract()
 
 
+def _canonical_extension_schedule_validation(
+    *, root: Path, sequence: tuple[str, ...], seed: int
+) -> dict[str, object]:
+    """Bind one prospective run to the deterministic TASK-009 schedule."""
+
+    provenance = _load_json(root / "provenance.json")
+    raw_fingerprints = provenance.get("dataset_fingerprints")
+    raw_ranges = provenance.get("manifest_partition_ranges")
+    if not isinstance(raw_fingerprints, dict) or not isinstance(raw_ranges, dict):
+        raise Study5BError(f"{root}: canonical schedule inputs are absent from provenance")
+    fingerprints: dict[str, str] = {}
+    online_ranges: dict[str, tuple[int, int]] = {}
+    range_record: dict[str, dict[str, int]] = {}
+    for domain in sequence[1:]:
+        fingerprint = raw_fingerprints.get(domain)
+        domain_ranges = raw_ranges.get(domain)
+        online = domain_ranges.get("online_stream") if isinstance(domain_ranges, dict) else None
+        if not _is_sha256(fingerprint) or not isinstance(online, dict):
+            raise Study5BError(f"{root}: canonical schedule inputs are invalid for {domain}")
+        start = _as_int(online.get("start"), f"{root} {domain} online start")
+        stop = _as_int(online.get("stop"), f"{root} {domain} online stop")
+        fingerprints[domain] = str(fingerprint)
+        online_ranges[domain] = (start, stop)
+        range_record[domain] = {"start": start, "stop": stop}
+    try:
+        expected = generate_supervision_schedule_from_identity(
+            sequence=sequence,
+            seed=seed,
+            dataset_fingerprints=fingerprints,
+            online_stream_ranges=online_ranges,
+        )
+        actual = load_matching_supervision_schedule(root / "supervision_schedule.json", expected)
+    except (OSError, ValueError) as exc:
+        raise Study5BError(
+            f"{root}: persisted schedule differs from deterministic canonical TASK-009 schedule"
+        ) from exc
+    actual_file_sha256 = _file_sha256(root / "supervision_schedule.json")
+    if actual.digest() != expected.digest():
+        raise Study5BError(
+            f"{root}: persisted schedule identity differs from canonical TASK-009 schedule"
+        )
+    return {
+        "status": "MATCHED_DETERMINISTIC_CANONICAL_SCHEDULE",
+        "generator_version": SUPERVISION_SCHEDULE_VERSION,
+        "dataset_fingerprints": fingerprints,
+        "online_stream_ranges": range_record,
+        "expected_schedule_digest": expected.digest(),
+        "actual_schedule_digest": actual.digest(),
+        "actual_schedule_file_sha256": actual_file_sha256,
+        "canonical_schedule_equal": True,
+    }
+
+
 def _upstream_study2_material(
     task008_dir: Path,
     expected_bundle_digest: str,
@@ -1096,6 +1153,7 @@ def _extension_study2_material(
     rows: list[dict[str, object]] = []
     adaptive_keys: set[tuple[tuple[str, ...], int, str]] = set()
     paired: dict[tuple[tuple[str, ...], int], list[AdaptiveArtifacts]] = defaultdict(list)
+    schedule_validations: dict[tuple[tuple[str, ...], int, str], dict[str, object]] = {}
     for raw_path in study2_run_dirs:
         root = Path(raw_path).resolve()
         summary = _load_json(root / "summary.json")
@@ -1118,6 +1176,11 @@ def _extension_study2_material(
             raise Study5BError(f"duplicate TASK-009 adaptive run: {identity}")
         adaptive_keys.add(identity)
         paired[(run.sequence, run.seed)].append(run)
+        schedule_validations[identity] = _canonical_extension_schedule_validation(
+            root=run.path,
+            sequence=run.sequence,
+            seed=run.seed,
+        )
         current, source = study5_sources._extract_adaptive_run(ontology, run, reference)
         rows.extend(current)
         source_record = _metadata_with_layer(
@@ -1149,6 +1212,9 @@ def _extension_study2_material(
     pairing_blocks: list[dict[str, object]] = []
     for key in sorted(paired):
         group = paired[key]
+        canonical_validations = [
+            schedule_validations[(item.sequence, item.seed, str(item.method))] for item in group
+        ]
         schedule_file_digests = {
             _file_sha256(item.path / "supervision_schedule.json") for item in group
         }
@@ -1159,8 +1225,10 @@ def _extension_study2_material(
             or len(schedule_file_digests) != 1
             or len({item.source_identity for item in group}) != 1
             or len({item.scientific_signature for item in group}) != 1
+            or len({_digest(item) for item in canonical_validations}) != 1
         ):
             raise Study5BError(f"paired TASK-009 methods differ scientifically for {key}")
+        canonical_validation = canonical_validations[0]
         pairing_blocks.append(
             {
                 "sequence": list(key[0]),
@@ -1168,6 +1236,7 @@ def _extension_study2_material(
                 "methods": list(METHODS),
                 "schedule_digest": group[0].schedule_digest,
                 "schedule_file_sha256": next(iter(schedule_file_digests)),
+                "canonical_schedule_validation": canonical_validation,
                 "source_identity": list(group[0].source_identity),
                 "scientific_signature_sha256": hashlib.sha256(
                     group[0].scientific_signature.encode("utf-8")
@@ -1218,7 +1287,7 @@ def _source_artifacts_record(
         "pipeline_compatibility": {
             "status": "VALIDATED_COMMON_FROZEN_STUDY2_PROTOCOL",
             "prior_evidence_basis": ("PINNED_TASK008_BUNDLE_VALIDATED_BY_VALIDATE_CONTINUAL_RUN"),
-            "extension_evidence_basis": "VALIDATE_CONTINUAL_RUN",
+            "extension_evidence_basis": ("VALIDATE_CONTINUAL_RUN_PLUS_CANONICAL_TASK009_SCHEDULE"),
             "starting_state": "MATCHING_STUDY1_ROTATION_AND_SEED",
             "preprocessing": "UNCHANGED_SOURCE_FITTED_47_FEATURE_STATE",
             "supervision": "B100_ONE_WINDOW_DELAY_FROZEN_LABEL_BLIND",
@@ -2780,7 +2849,7 @@ def _validate_source_artifacts_record(
     expected_compatibility = {
         "status": "VALIDATED_COMMON_FROZEN_STUDY2_PROTOCOL",
         "prior_evidence_basis": "PINNED_TASK008_BUNDLE_VALIDATED_BY_VALIDATE_CONTINUAL_RUN",
-        "extension_evidence_basis": "VALIDATE_CONTINUAL_RUN",
+        "extension_evidence_basis": ("VALIDATE_CONTINUAL_RUN_PLUS_CANONICAL_TASK009_SCHEDULE"),
         "starting_state": "MATCHING_STUDY1_ROTATION_AND_SEED",
         "preprocessing": "UNCHANGED_SOURCE_FITTED_47_FEATURE_STATE",
         "supervision": "B100_ONE_WINDOW_DELAY_FROZEN_LABEL_BLIND",
@@ -2993,6 +3062,7 @@ def _validate_source_artifacts_record(
             "methods",
             "schedule_digest",
             "schedule_file_sha256",
+            "canonical_schedule_validation",
             "source_identity",
             "scientific_signature_sha256",
         }:
@@ -3001,6 +3071,7 @@ def _validate_source_artifacts_record(
         seed = _as_int(block["seed"], "pairing-block seed")
         key = (sequence, seed)
         source_identity = block["source_identity"]
+        canonical = block["canonical_schedule_validation"]
         if (
             key in block_seen
             or sequence not in EXTENSION_ROTATIONS
@@ -3014,6 +3085,59 @@ def _validate_source_artifacts_record(
             or any(not _is_sha256(value) for value in source_identity)
         ):
             raise Study5BError("extension pairing-block identity is invalid")
+        if not isinstance(canonical, dict) or set(canonical) != {
+            "status",
+            "generator_version",
+            "dataset_fingerprints",
+            "online_stream_ranges",
+            "expected_schedule_digest",
+            "actual_schedule_digest",
+            "actual_schedule_file_sha256",
+            "canonical_schedule_equal",
+        }:
+            raise Study5BError("extension canonical-schedule provenance schema differs")
+        canonical_fingerprints = canonical.get("dataset_fingerprints")
+        canonical_ranges = canonical.get("online_stream_ranges")
+        later_domains = sequence[1:]
+        if (
+            canonical.get("status") != "MATCHED_DETERMINISTIC_CANONICAL_SCHEDULE"
+            or canonical.get("generator_version") != SUPERVISION_SCHEDULE_VERSION
+            or canonical.get("canonical_schedule_equal") is not True
+            or not isinstance(canonical_fingerprints, dict)
+            or canonical_fingerprints
+            != {domain: expected_fingerprints[domain] for domain in later_domains}
+            or not isinstance(canonical_ranges, dict)
+            or set(canonical_ranges) != set(later_domains)
+        ):
+            raise Study5BError("extension canonical-schedule provenance is invalid")
+        online_ranges: dict[str, tuple[int, int]] = {}
+        for domain in later_domains:
+            current_range = canonical_ranges.get(domain)
+            if not isinstance(current_range, dict) or set(current_range) != {"start", "stop"}:
+                raise Study5BError("extension canonical online-stream range is invalid")
+            online_ranges[domain] = (
+                _as_int(current_range["start"], f"{domain} canonical online start"),
+                _as_int(current_range["stop"], f"{domain} canonical online stop"),
+            )
+        try:
+            expected_schedule = generate_supervision_schedule_from_identity(
+                sequence=sequence,
+                seed=seed,
+                dataset_fingerprints=cast(Mapping[str, str], canonical_fingerprints),
+                online_stream_ranges=online_ranges,
+            )
+        except ValueError as exc:
+            raise Study5BError("extension canonical schedule cannot be reconstructed") from exc
+        expected_schedule_digest = expected_schedule.digest()
+        if (
+            canonical.get("expected_schedule_digest") != expected_schedule_digest
+            or canonical.get("actual_schedule_digest") != expected_schedule_digest
+            or canonical.get("actual_schedule_file_sha256") != block["schedule_file_sha256"]
+            or block["schedule_digest"] != expected_schedule_digest
+        ):
+            raise Study5BError(
+                "extension schedule differs from deterministic canonical TASK-009 schedule"
+            )
         block_seen.add(key)
         adaptive_group = [
             item
