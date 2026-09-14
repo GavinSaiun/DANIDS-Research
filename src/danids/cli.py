@@ -31,6 +31,7 @@ from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
 from danids.evaluation.study4 import evaluate_study4
+from danids.evaluation.study5 import evaluate_study5_threats
 from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
 from danids.experiments.health import HealthSmokeLimits, run_health_experiment
 from danids.experiments.policy_development import (
@@ -423,6 +424,23 @@ def _validate_study5_contract(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_study5_threats(args: argparse.Namespace) -> int:
+    output = evaluate_study5_threats(
+        contract_path=args.contract,
+        study1_run_dirs=args.study1_run_dirs,
+        study1_evaluation_dir=args.study1_evaluation_dir,
+        study2_static_run_dirs=args.study2_static_run_dirs,
+        study2_run_dirs=args.study2_run_dirs,
+        study2_evaluation_dir=args.study2_evaluation_dir,
+        study4_run_dirs=args.study4_run_dirs,
+        study4_evaluation_dir=args.study4_evaluation_dir,
+        output_dir=args.output_dir,
+    )
+    summary = json.loads((output / "study5_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -638,6 +656,45 @@ def build_parser() -> argparse.ArgumentParser:
     validate_study5.add_argument("--materialization-root", required=True, type=Path)
     validate_study5.add_argument("--chunk-rows", type=int, default=100_000)
     validate_study5.set_defaults(handler=_validate_study5_contract)
+
+    evaluate_study5 = subparsers.add_parser(
+        "evaluate-study5-threats",
+        help="artifact-only Study-5A native and semantic threat audit",
+    )
+    evaluate_study5.add_argument("--contract", required=True, type=Path)
+    evaluate_study5.add_argument(
+        "--study1-run",
+        dest="study1_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5.add_argument("--study1-evaluation-dir", required=True, type=Path)
+    evaluate_study5.add_argument(
+        "--study2-static-run",
+        dest="study2_static_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5.add_argument(
+        "--study2-run",
+        dest="study2_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5.add_argument("--study2-evaluation-dir", required=True, type=Path)
+    evaluate_study5.add_argument(
+        "--study4-run",
+        dest="study4_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5.add_argument("--study4-evaluation-dir", required=True, type=Path)
+    evaluate_study5.add_argument("--output-dir", required=True, type=Path)
+    evaluate_study5.set_defaults(handler=_evaluate_study5_threats)
     return parser
 
 

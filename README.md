@@ -144,6 +144,14 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
+**TASK-008 — Study 5A native and semantic threat audit.** The package now provides the
+write-once `task008-study5a-threat-audit-v1` evaluator over the exact reviewed Study-1,
+Study-2, and Study-4 artifact rosters. It validates source provenance and physical support,
+then emits canonical native-family cells and deterministic semantic, novelty,
+hidden-failure, transfer, trajectory, and forgetting tables without opening raw flow data
+or rescoring a model. See
+[`docs/study5_native_threat_audit.md`](docs/study5_native_threat_audit.md).
+
 **TASK-007 — Study 5 ontology and estimand freeze.** The repository now contains a
 versioned, fingerprint-bound exact native-label ontology and strict validation contract.
 Study-5 family detection, physical support, domain-entry novelty, hidden-failure,
