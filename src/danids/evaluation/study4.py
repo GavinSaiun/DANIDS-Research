@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from danids.adaptation.actions import InterventionAction, PolicyObservation
+from danids.adaptation.actions import ACTION_ORDER, InterventionAction, PolicyObservation
 from danids.config.continual import FROZEN_ROTATIONS
 from danids.config.study4 import STUDY4_CONFIRMATORY_SEEDS, Study4Method
 from danids.continual.supervision import row_positions_digest
@@ -48,7 +48,7 @@ from danids.policy.query import (
 )
 
 STUDY4_RUN_ARTIFACT_VERSION = "task006-e4-run-v1"
-STUDY4_EVALUATION_VERSION = "task006-e4-evaluation-v1"
+STUDY4_EVALUATION_VERSION = "task006-e4-evaluation-v2"
 CORE_BUNDLE_DIRNAME = "core_artifacts"
 _UNIT_INTERVAL_ROUNDOFF_TOLERANCE = 1e-12
 HEALTH_BUNDLE_DIRNAME = "health_artifact"
@@ -87,6 +87,22 @@ _RUN_FILES = (
     SUMMARY_FILENAME,
 )
 
+_SHARED_CONTRACT_FIELDS = (
+    "dataset_fingerprints",
+    "feature_contract_version",
+    "feature_columns",
+    "split_version",
+    "materializer_version",
+    "preprocessor_version",
+    "window_size",
+    "boundary_mode",
+    "health_artifact_identity",
+    "health_model_sha256",
+    "health_thresholds_digest",
+    "health_feature_contract_digest",
+    "always_adapt_semantics",
+)
+
 
 class Study4ArtifactError(ValueError):
     """Raised when persisted E4 evidence violates its scientific contract."""
@@ -98,6 +114,55 @@ def _canonical(value: object) -> bytes:
 
 def _digest(value: object) -> str:
     return hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def _shared_contract(
+    provenance: Mapping[str, Any],
+    config: Mapping[str, Any],
+    fingerprints: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return the method-independent contract used for cross-treatment pairing."""
+
+    return {
+        "dataset_fingerprints": dict(fingerprints),
+        "feature_contract_version": provenance.get("feature_contract_version"),
+        "feature_columns": provenance.get("feature_columns"),
+        "split_version": provenance.get("split_version"),
+        "materializer_version": provenance.get("materializer_version"),
+        "preprocessor_version": provenance.get("preprocessor_version"),
+        "window_size": provenance.get("window_size"),
+        "boundary_mode": provenance.get("boundary_mode"),
+        "health_artifact_identity": provenance.get("health_artifact_identity"),
+        "health_model_sha256": provenance.get("health_model_sha256"),
+        "health_thresholds_digest": provenance.get("health_thresholds_digest"),
+        "health_feature_contract_digest": provenance.get("health_feature_contract_digest"),
+        "always_adapt_semantics": config.get("always_adapt"),
+    }
+
+
+def _offline_oracle_contract() -> dict[str, Any]:
+    """Return the exact frozen method-specific Oracle contract."""
+
+    return {
+        "version": OFFLINE_ORACLE_VERSION,
+        "information_policy": ORACLE_INFORMATION_POLICY,
+        "horizon": ORACLE_HORIZON,
+        "action_order": [action.value for action in ACTION_ORDER],
+        "query_schedule": "frozen_d040_label_blind",
+        "permanent_holdout_used_for_choice": False,
+        "non_deployable_upper_bound": True,
+    }
+
+
+def _treatment_contract(method: Study4Method, provenance: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate and return fields that are specific to one E4 treatment."""
+
+    if method is not Study4Method.OFFLINE_ORACLE:
+        return {}
+    oracle_contract = provenance.get("offline_oracle_semantics")
+    if oracle_contract != _offline_oracle_contract():
+        raise Study4ArtifactError("OFFLINE_ORACLE scientific contract semantics differ")
+    return {"offline_oracle_semantics": oracle_contract}
 
 
 def _file_sha256(path: Path) -> str:
@@ -740,6 +805,8 @@ class ValidatedStudy4Run:
     seed: int
     smoke: bool
     contract_digest: str
+    shared_contract: dict[str, Any]
+    shared_contract_digest: str
     source_checkpoint_sha256: str
     summary: dict[str, Any]
     windows: list[dict[str, Any]]
@@ -999,26 +1066,9 @@ def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> Valid
         raise Study4ArtifactError("Study-4 resolved seed differs from provenance")
     fingerprints = _validate_fingerprints(provenance.get("dataset_fingerprints"))
     partitions = _partition_ranges(provenance.get("manifest_partition_ranges"), sequence)
-    required_contract = {
-        "dataset_fingerprints": fingerprints,
-        "feature_contract_version": provenance.get("feature_contract_version"),
-        "feature_columns": provenance.get("feature_columns"),
-        "split_version": provenance.get("split_version"),
-        "materializer_version": provenance.get("materializer_version"),
-        "preprocessor_version": provenance.get("preprocessor_version"),
-        "window_size": provenance.get("window_size"),
-        "boundary_mode": provenance.get("boundary_mode"),
-        "health_artifact_identity": provenance.get("health_artifact_identity"),
-        "health_model_sha256": provenance.get("health_model_sha256"),
-        "health_thresholds_digest": provenance.get("health_thresholds_digest"),
-        "health_feature_contract_digest": provenance.get("health_feature_contract_digest"),
-        "always_adapt_semantics": config.get("always_adapt"),
-        **(
-            {"offline_oracle_semantics": provenance.get("offline_oracle_semantics")}
-            if method is Study4Method.OFFLINE_ORACLE
-            else {}
-        ),
-    }
+    shared_contract = _shared_contract(provenance, config, fingerprints)
+    treatment_contract = _treatment_contract(method, provenance)
+    required_contract = {**shared_contract, **treatment_contract}
     contract_digest = _digest(required_contract)
     if provenance.get("scientific_contract_digest") != contract_digest:
         raise Study4ArtifactError("Study-4 scientific contract digest is invalid")
@@ -1168,6 +1218,8 @@ def validate_study4_run(path: str | Path, *, allow_smoke: bool = False) -> Valid
         seed,
         smoke,
         contract_digest,
+        shared_contract,
+        _digest(shared_contract),
         checkpoint,
         summary,
         windows,
@@ -1213,7 +1265,14 @@ def _study4_outputs(
             "sequence": "-".join(run.sequence),
             "seed": run.seed,
         }
-        run_rows.append({**run.summary, **context})
+        run_rows.append(
+            {
+                **run.summary,
+                **context,
+                "shared_contract_digest": run.shared_contract_digest,
+                "scientific_contract_digest": run.contract_digest,
+            }
+        )
         windows.extend({**context, **row} for row in run.windows)
         holdouts.extend({**context, **row} for row in run.holdouts)
         interventions.extend({**context, **row} for row in run.interventions)
@@ -1362,9 +1421,22 @@ def evaluate_study4(
         raise Study4ArtifactError(
             "Study-4 aggregation contains duplicate method/rotation/seed runs"
         )
-    contracts = {run.contract_digest for run in runs}
-    if len(contracts) != 1:
-        raise Study4ArtifactError("Study-4 runs have mixed scientific/pipeline contracts")
+    for run in runs:
+        if (
+            set(run.shared_contract) != set(_SHARED_CONTRACT_FIELDS)
+            or _digest(run.shared_contract) != run.shared_contract_digest
+        ):
+            raise Study4ArtifactError("Study-4 run shared contract identity is invalid")
+    shared_contracts = {run.shared_contract_digest for run in runs}
+    if len(shared_contracts) != 1:
+        raise Study4ArtifactError("Study-4 runs have mixed shared scientific/pipeline contracts")
+    treatment_contracts: dict[str, set[str]] = {}
+    for run in runs:
+        treatment_contracts.setdefault(run.method.value, set()).add(run.contract_digest)
+    if any(len(values) != 1 for values in treatment_contracts.values()):
+        raise Study4ArtifactError(
+            "Study-4 runs have mixed treatment-specific contracts within a method"
+        )
     paired_sources: dict[tuple[tuple[str, ...], int], str] = {}
     for run in runs:
         pair = (run.sequence, run.seed)
@@ -1407,7 +1479,11 @@ def evaluate_study4(
         "version": STUDY4_EVALUATION_VERSION,
         "allow_smoke": allow_smoke,
         "allow_incomplete": allow_incomplete,
-        "scientific_contract_digest": runs[0].contract_digest,
+        "shared_contract": runs[0].shared_contract,
+        "shared_contract_digest": runs[0].shared_contract_digest,
+        "treatment_scientific_contract_digests": {
+            method: next(iter(digests)) for method, digests in sorted(treatment_contracts.items())
+        },
         "source_runs": source_runs,
         "observed_pairs": [
             {"sequence": list(sequence), "seed": seed, "method": method.value}
@@ -1458,6 +1534,28 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
     windows = _records(root / "study4_windows.csv")
     holdouts = _records(root / "study4_holdouts.csv")
     interventions = _records(root / "study4_interventions.csv")
+    expected_contract_fields = {
+        "version",
+        "allow_smoke",
+        "allow_incomplete",
+        "shared_contract",
+        "shared_contract_digest",
+        "treatment_scientific_contract_digests",
+        "source_runs",
+        "observed_pairs",
+    }
+    if (
+        set(contract) != expected_contract_fields
+        or contract.get("version") != STUDY4_EVALUATION_VERSION
+    ):
+        raise Study4ArtifactError("Study-4 evaluation contract schema/version is invalid")
+    shared_contract = contract.get("shared_contract")
+    if (
+        not isinstance(shared_contract, dict)
+        or set(shared_contract) != set(_SHARED_CONTRACT_FIELDS)
+        or contract.get("shared_contract_digest") != _digest(shared_contract)
+    ):
+        raise Study4ArtifactError("Study-4 evaluation shared contract identity is invalid")
     represented = {(str(row["experiment_id"])) for row in run_rows}
     source_runs = contract.get("source_runs")
     if (
@@ -1469,6 +1567,29 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
     keys = {(str(row["sequence"]), int(row["seed"]), str(row["method"])) for row in run_rows}
     if len(keys) != len(run_rows):
         raise Study4ArtifactError("Study-4 evaluation canonical runs contain duplicates")
+    expected_observed_pairs = [
+        {"sequence": sequence.split("-"), "seed": seed, "method": method}
+        for sequence, seed, method in sorted(keys)
+    ]
+    if contract.get("observed_pairs") != expected_observed_pairs:
+        raise Study4ArtifactError("Study-4 evaluation observed-pair metadata differs")
+    shared_digests = {str(row.get("shared_contract_digest")) for row in run_rows}
+    if shared_digests != {str(contract["shared_contract_digest"])}:
+        raise Study4ArtifactError("Study-4 evaluation canonical runs have mixed shared contracts")
+    method_contracts: dict[str, set[str]] = {}
+    for row in run_rows:
+        method_contracts.setdefault(str(row["method"]), set()).add(
+            str(row.get("scientific_contract_digest"))
+        )
+    if any(len(values) != 1 or "None" in values for values in method_contracts.values()):
+        raise Study4ArtifactError(
+            "Study-4 evaluation canonical runs have mixed treatment contracts"
+        )
+    expected_treatment_contracts = {
+        method: next(iter(values)) for method, values in sorted(method_contracts.items())
+    }
+    if contract.get("treatment_scientific_contract_digests") != expected_treatment_contracts:
+        raise Study4ArtifactError("Study-4 evaluation treatment contract metadata differs")
     expected = {
         ("-".join(rotation), seed, method.value)
         for rotation in FROZEN_ROTATIONS
@@ -1506,9 +1627,20 @@ def validate_study4_evaluation(output_dir: str | Path) -> None:
                 sequence=tuple(str(row["sequence"]).split("-")),
                 seed=int(row["seed"]),
                 smoke=_as_bool(row["smoke"], "smoke"),
-                contract_digest=str(contract["scientific_contract_digest"]),
+                contract_digest=str(row["scientific_contract_digest"]),
+                shared_contract=shared_contract,
+                shared_contract_digest=str(row["shared_contract_digest"]),
                 source_checkpoint_sha256="artifact-only",
-                summary={key: value for key, value in row.items() if key not in {"sequence"}},
+                summary={
+                    key: value
+                    for key, value in row.items()
+                    if key
+                    not in {
+                        "sequence",
+                        "shared_contract_digest",
+                        "scientific_contract_digest",
+                    }
+                },
                 windows=[item for item in windows if item["experiment_id"] == experiment_id],
                 holdouts=[item for item in holdouts if item["experiment_id"] == experiment_id],
                 interventions=[

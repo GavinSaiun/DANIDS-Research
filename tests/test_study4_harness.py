@@ -357,7 +357,41 @@ def test_study4_auc_validation_accepts_only_numerical_boundary_roundoff() -> Non
         study4._validate_metric_counts(invalid, "invalid")
 
 
-def _validated(method: Study4Method, *, labels: int, unsafe: int) -> ValidatedStudy4Run:
+def _shared_contract_fixture() -> dict[str, Any]:
+    return {
+        "dataset_fingerprints": {
+            name: str(index) * 64 for index, name in enumerate("UTCB", start=1)
+        },
+        "feature_contract_version": "task001-primary-common-v1",
+        "feature_columns": [f"F{index}" for index in range(47)],
+        "split_version": "task001-v1",
+        "materializer_version": "task002-materialized-v2",
+        "preprocessor_version": "task002-numeric-preprocessor-v1",
+        "window_size": 50_000,
+        "boundary_mode": "task_free",
+        "health_artifact_identity": "a" * 64,
+        "health_model_sha256": "b" * 64,
+        "health_thresholds_digest": "c" * 64,
+        "health_feature_contract_digest": "d" * 64,
+        "always_adapt_semantics": {
+            "action": "A4_REPLAY_UPDATE",
+            "query_timing": "every_pending_free_window_until_budget_exhausted",
+            "use_core_query_selector": True,
+            "use_core_delay_and_budget": True,
+            "use_core_allocation": True,
+            "use_audit_guard": True,
+        },
+    }
+
+
+def _validated(
+    method: Study4Method,
+    *,
+    labels: int,
+    unsafe: int,
+    sequence: tuple[str, ...] = ("U", "T", "C", "B"),
+    seed: int = 42,
+) -> ValidatedStudy4Run:
     summary = {
         "labels_requested": labels,
         "labels_released": labels,
@@ -367,24 +401,36 @@ def _validated(method: Study4Method, *, labels: int, unsafe: int) -> ValidatedSt
         "missed_harmful_windows": unsafe,
         "smoke": False,
     }
+    shared_contract = _shared_contract_fixture()
+    full_contract = {
+        **shared_contract,
+        **(
+            {"offline_oracle_semantics": study4._offline_oracle_contract()}
+            if method is Study4Method.OFFLINE_ORACLE
+            else {}
+        ),
+    }
+    experiment_id = f"E4_{method.value}_{'-'.join(sequence)}_s{seed}"
     return ValidatedStudy4Run(
-        Path(method.value),
-        f"E4_{method.value}_U-T-C-B_s42",
-        method,
-        ("U", "T", "C", "B"),
-        42,
-        False,
-        "contract",
-        "checkpoint",
-        summary,
-        [
+        path=Path(method.value),
+        experiment_id=experiment_id,
+        method=method,
+        sequence=sequence,
+        seed=seed,
+        smoke=False,
+        contract_digest=study4._digest(full_contract),
+        shared_contract=shared_contract,
+        shared_contract_digest=study4._digest(shared_contract),
+        source_checkpoint_sha256="checkpoint",
+        summary=summary,
+        windows=[
             {
                 "unsafe_exposure": bool(unsafe),
                 "missed_harmful_window": bool(unsafe),
                 "false_health_alarm": False,
             }
         ],
-        [
+        holdouts=[
             {
                 "event": "final",
                 "pr_auc": 0.8,
@@ -394,7 +440,26 @@ def _validated(method: Study4Method, *, labels: int, unsafe: int) -> ValidatedSt
                 "operational_tpr_forgetting": 0.1,
             }
         ],
-        [],
+        interventions=[],
+    )
+
+
+def _seal_evaluation(root: Path) -> None:
+    path = root / study4.MANIFEST_FILENAME
+    path.unlink(missing_ok=True)
+    files = study4._tree_digests(root)
+    path.write_text(
+        json.dumps(
+            {
+                "version": study4.STUDY4_EVALUATION_VERSION,
+                "files": files,
+                "bundle_digest": study4._digest(files),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 
@@ -422,7 +487,7 @@ def test_paired_outputs_compare_core_and_always_without_policy_or_oracle_rows() 
     }
 
 
-def test_aggregation_rejects_duplicate_pairs_mixed_contracts_and_smoke(
+def test_aggregation_rejects_duplicate_pairs_shared_mismatch_missing_and_smoke(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     core = _validated(Study4Method.DANIDS_CORE, labels=25, unsafe=0)
@@ -430,16 +495,107 @@ def test_aggregation_rejects_duplicate_pairs_mixed_contracts_and_smoke(
     with pytest.raises(Study4ArtifactError, match="duplicate"):
         evaluate_study4(["one", "two"], tmp_path / "duplicate", allow_incomplete=True)
 
-    other = replace(core, method=Study4Method.ALWAYS_ADAPT, contract_digest="other")
+    changed_shared = {**core.shared_contract, "window_size": 25_000}
+    other = replace(
+        core,
+        method=Study4Method.ALWAYS_ADAPT,
+        shared_contract=changed_shared,
+        shared_contract_digest=study4._digest(changed_shared),
+    )
     values = iter((core, other))
     monkeypatch.setattr(study4, "validate_study4_run", lambda *_args, **_kwargs: next(values))
-    with pytest.raises(Study4ArtifactError, match="mixed"):
+    with pytest.raises(Study4ArtifactError, match="mixed shared"):
         evaluate_study4(["one", "two"], tmp_path / "mixed", allow_incomplete=True)
+
+    monkeypatch.setattr(study4, "validate_study4_run", lambda *_args, **_kwargs: core)
+    with pytest.raises(Study4ArtifactError, match="exactly 48"):
+        evaluate_study4(["one"], tmp_path / "missing")
 
     smoke = replace(core, smoke=True)
     monkeypatch.setattr(study4, "validate_study4_run", lambda *_args, **_kwargs: smoke)
     with pytest.raises(Study4ArtifactError, match="smoke"):
         evaluate_study4(["one"], tmp_path / "smoke", allow_incomplete=True)
+
+
+def test_mixed_method_full_matrix_uses_shared_and_treatment_contracts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    methods = (
+        Study4Method.STATIC,
+        Study4Method.ALWAYS_ADAPT,
+        Study4Method.DANIDS_CORE,
+        Study4Method.OFFLINE_ORACLE,
+    )
+    runs: list[ValidatedStudy4Run] = []
+    for sequence in study4.FROZEN_ROTATIONS:
+        for seed in study4.STUDY4_CONFIRMATORY_SEEDS:
+            for method in methods:
+                path = tmp_path / "runs" / f"E4_{method.value}_{'-'.join(sequence)}_s{seed}"
+                path.mkdir(parents=True)
+                (path / study4.MANIFEST_FILENAME).write_text("{}\n", encoding="utf-8")
+                runs.append(
+                    replace(
+                        _validated(method, labels=25, unsafe=0, sequence=sequence, seed=seed),
+                        path=path,
+                    )
+                )
+    by_path = {run.path: run for run in runs}
+    monkeypatch.setattr(
+        study4,
+        "validate_study4_run",
+        lambda path, **_kwargs: by_path[Path(path)],
+    )
+
+    output = evaluate_study4([run.path for run in runs], tmp_path / "evaluation")
+
+    summary = json.loads((output / "study4_summary.json").read_text(encoding="utf-8"))
+    contract = json.loads((output / "evaluation_contract.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "complete"
+    assert summary["run_count"] == 48
+    assert summary["paired_core_vs_always_count"] == 12
+    assert len(contract["treatment_scientific_contract_digests"]) == 4
+    assert (
+        contract["treatment_scientific_contract_digests"]["OFFLINE_ORACLE"]
+        != contract["treatment_scientific_contract_digests"]["DANIDS_CORE"]
+    )
+    assert contract["shared_contract_digest"] == runs[0].shared_contract_digest
+    study4.validate_study4_evaluation(output)
+
+    contract["treatment_scientific_contract_digests"]["OFFLINE_ORACLE"] = "0" * 64
+    (output / "evaluation_contract.json").write_text(
+        json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _seal_evaluation(output)
+    with pytest.raises(Study4ArtifactError, match="treatment contract metadata"):
+        study4.validate_study4_evaluation(output)
+
+
+def test_paired_source_checkpoint_validation_is_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    core = _validated(Study4Method.DANIDS_CORE, labels=25, unsafe=0)
+    always = replace(
+        _validated(Study4Method.ALWAYS_ADAPT, labels=100, unsafe=0),
+        source_checkpoint_sha256="different-checkpoint",
+    )
+    values = iter((core, always))
+    monkeypatch.setattr(study4, "validate_study4_run", lambda *_args, **_kwargs: next(values))
+    with pytest.raises(Study4ArtifactError, match="different source checkpoints"):
+        evaluate_study4(["core", "always"], tmp_path / "paired", allow_incomplete=True)
+
+
+def test_offline_oracle_treatment_contract_is_frozen() -> None:
+    expected = study4._offline_oracle_contract()
+    assert study4._treatment_contract(
+        Study4Method.OFFLINE_ORACLE,
+        {"offline_oracle_semantics": expected},
+    ) == {"offline_oracle_semantics": expected}
+    changed = {**expected, "horizon": "unbounded_future"}
+    with pytest.raises(Study4ArtifactError, match="semantics differ"):
+        study4._treatment_contract(
+            Study4Method.OFFLINE_ORACLE,
+            {"offline_oracle_semantics": changed},
+        )
 
 
 def test_incomplete_artifact_only_evaluation_round_trips_empty_tables(
