@@ -22,6 +22,7 @@ from danids.evaluation.study4_analysis import (
     build_overall_table,
     determine_hypothesis_verdicts,
     load_study4_analysis_inputs,
+    validate_study4_confirmatory_analysis,
 )
 
 
@@ -228,16 +229,30 @@ def test_complete_matrix_builds_deterministic_write_once_package(
     }
     for figure in output.glob("*.png"):
         assert figure.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    headline = json.loads((output / "headline_results.json").read_text(encoding="utf-8"))
+    headline = json.loads((output / "study4_confirmatory_results.json").read_text(encoding="utf-8"))
     assert headline["experimental_completion"]["run_count"] == 48
     assert headline["confirmatory_hypotheses"]["H4"]["verdict"] == "NOT_SUPPORTED"
     assert headline["confirmatory_hypotheses"]["H10"]["verdict"] == "PARTIALLY_SUPPORTED"
+    verdict_text = (output / "study4_hypothesis_verdicts.md").read_text(encoding="utf-8")
+    assert "Overall: **NOT_SUPPORTED**" in verdict_text
+    assert "Overall: **PARTIALLY_SUPPORTED**" in verdict_text
+    assert "central safety-efficiency proposition was not supported" in verdict_text
+    discussion_text = (output / "study4_discussion_notes.md").read_text(encoding="utf-8")
+    assert "intervention sparsity but not supervision sparsity" in discussion_text
+    assert "exploratory and mechanistic only" in discussion_text
+    assert "must not be used to retrospectively alter Core" in discussion_text
+    assert not (output / "headline_results.json").exists()
+    assert not (output / "study4_results.md").exists()
     repeat = tmp_path / "analysis-repeat"
     analyze_study4_confirmatory(valid_evaluation, repeat)
     first_manifest = json.loads((output / "analysis_manifest.json").read_text(encoding="utf-8"))
     repeat_manifest = json.loads((repeat / "analysis_manifest.json").read_text(encoding="utf-8"))
     assert first_manifest["bundle_digest"] == repeat_manifest["bundle_digest"]
     assert first_manifest["files"] == repeat_manifest["files"]
+    assert validate_study4_confirmatory_analysis(output) == output.resolve()
+    (repeat / "study4_discussion_notes.md").write_text("corrupted\n", encoding="utf-8")
+    with pytest.raises(Study4AnalysisError, match="file digest differs"):
+        validate_study4_confirmatory_analysis(repeat)
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         analyze_study4_confirmatory(valid_evaluation, output)
 

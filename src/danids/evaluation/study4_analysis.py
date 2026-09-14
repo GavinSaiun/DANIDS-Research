@@ -59,8 +59,10 @@ SOURCE_FILES: Final = (
 )
 TABLE_FILES: Final = tuple(name for name in SOURCE_FILES if name.endswith(".csv"))
 OUTPUT_FILES: Final = (
-    "headline_results.json",
-    "study4_results.md",
+    "study4_confirmatory_results.json",
+    "study4_confirmatory_results.md",
+    "study4_hypothesis_verdicts.md",
+    "study4_discussion_notes.md",
     "table_study4_overall.csv",
     "table_study4_overall.md",
     "table_study4_core_vs_always.csv",
@@ -765,7 +767,7 @@ def _save_oracle_gap_figure(overall: pd.DataFrame, output: Path) -> None:
     plt.close(figure)
 
 
-def _thesis_results_text(
+def _confirmatory_results_text(
     inputs: Study4AnalysisInputs,
     overall: pd.DataFrame,
     headline: Mapping[str, Any],
@@ -775,9 +777,6 @@ def _thesis_results_text(
     static = _method_row(overall, Study4Method.STATIC.value)
     oracle = _method_row(overall, Study4Method.OFFLINE_ORACLE.value)
     core_always = cast(Mapping[str, Any], headline["confirmatory_comparisons"]["core_minus_always"])
-    always_static = cast(
-        Mapping[str, Any], headline["confirmatory_comparisons"]["always_minus_static"]
-    )
     core_oracle = cast(Mapping[str, Any], headline["confirmatory_comparisons"]["core_minus_oracle"])
     paired = cast(Mapping[str, Any], headline["paired_core_vs_always"])
     unsafe_counts = cast(Mapping[str, Any], paired["unsafe_exposure"])
@@ -787,9 +786,6 @@ def _thesis_results_text(
         f"Core-minus-Always unsafe windows"
         for row in rotations
     )
-    action_totals = cast(Mapping[str, Mapping[str, int]], headline["action_attempt_totals"])
-    oracle_total = sum(action_totals[Study4Method.OFFLINE_ORACLE.value].values())
-    oracle_a3 = action_totals[Study4Method.OFFLINE_ORACLE.value]["A3_FULL_FINE_TUNE"]
     h4 = cast(Mapping[str, Any], headline["confirmatory_hypotheses"]["H4"])
     h10 = cast(Mapping[str, Any], headline["confirmatory_hypotheses"]["H10"])
     return f"""# Study 4 confirmatory results
@@ -880,36 +876,126 @@ The frozen Core policy reduced accepted update frequency by approximately 30% bu
 reduce label use and did not maintain Always-Adapt operating-envelope compliance. Minimum
 intervention remains mechanistically plausible, as shown by the Oracle, but the deployable
 Core treatment did not satisfy the central confirmatory safety-efficiency requirements.
-
-## Descriptive and exploratory interpretation
-
-### Always-Adapt versus Static
-
-Always-Adapt was approximately indistinguishable from, and slightly worse than, Static in
-aggregate safety despite using 3,600 labels. It produced
-{float(always_static["unsafe_exposure_per_run"]["absolute_difference"]):+.2f} unsafe windows per
-run and {float(always_static["compliance_rate"]["absolute_percentage_point_difference"]):+.2f}
-compliance percentage points relative to Static. This weak comparator performance matters:
-unconditional use of the frozen B100 update mechanism did not itself improve aggregate safety.
-
-### Query selectivity
-
-Core exhausted the same 3,600-label total as Always-Adapt. Health-aware action selection was
-sparser, but health-aware querying was not selective under the frozen query rule.
-
-### Oracle mechanism and remaining capability gap
-
-The Oracle demonstrates that sparse beneficial interventions exist: it accepted only 11
-model-changing actions across all runs. However, its {100.0 * float(oracle["compliance_rate"]):.2f}%
-absolute compliance indicates that most harm remained unrecoverable under the frozen B100,
-delayed-supervision, and A0--A4 capability regime. Action selection is therefore not the only
-limitation.
-
-Of the Oracle's {oracle_total} model-changing selections, {oracle_a3} were A3 full fine-tuning.
-A3 was prospectively excluded from normal Core. This observation is exploratory and
-mechanistic only and must not be used to retrospectively add A3 to Core or change the frozen
-confirmatory interpretation.
 """
+
+
+def _hypothesis_verdicts_text(headline: Mapping[str, Any]) -> str:
+    hypotheses = cast(Mapping[str, Mapping[str, Any]], headline["confirmatory_hypotheses"])
+    h4 = hypotheses["H4"]
+    h10 = hypotheses["H10"]
+    return f"""# Study 4 hypothesis verdicts
+
+These verdicts are derived from the frozen confirmatory Study-4 results.
+
+## H4
+
+- Update reduction: supported
+- Label reduction: not supported
+- Comparable safety: not supported
+- Overall: **{h4["verdict"]}**
+
+## H10
+
+- Fewer updates: supported
+- Less supervision: not supported
+- Operational forgetting: descriptively favourable
+- Comparable safety: not supported
+- Overall: **{h10["verdict"]}**
+
+The central safety-efficiency proposition was not supported. The partial verdict denotes
+component-level support only and does not override the failed safety and supervision conditions.
+"""
+
+
+def _discussion_notes_text(
+    overall: pd.DataFrame,
+    headline: Mapping[str, Any],
+) -> str:
+    static = _method_row(overall, Study4Method.STATIC.value)
+    always = _method_row(overall, Study4Method.ALWAYS_ADAPT.value)
+    oracle = _method_row(overall, Study4Method.OFFLINE_ORACLE.value)
+    comparisons = cast(Mapping[str, Mapping[str, Any]], headline["confirmatory_comparisons"])
+    always_static = comparisons["always_minus_static"]
+    core_always = comparisons["core_minus_always"]
+    resources = cast(Mapping[str, Mapping[str, Any]], headline["resource_totals"])
+    action_totals = cast(Mapping[str, Mapping[str, int]], headline["action_attempt_totals"])
+    paired = cast(Mapping[str, Any], headline["paired_core_vs_always"])
+    rotations = cast(Sequence[Mapping[str, Any]], paired["rotation_differences"])
+    rotation_lines = "\n".join(
+        f"- {row['sequence']}: {float(row['mean_unsafe_exposure_difference']):+.2f} mean "
+        "Core-minus-Always unsafe windows"
+        for row in rotations
+    )
+    oracle_actions = action_totals[Study4Method.OFFLINE_ORACLE.value]
+    oracle_total = sum(oracle_actions.values())
+    oracle_a3 = oracle_actions["A3_FULL_FINE_TUNE"]
+    return f"""# Study 4 discussion notes
+
+These observations are descriptive or exploratory. They do not modify the frozen Study-4
+hypotheses, controller, or scientific protocol.
+
+## Always-Adapt versus Static
+
+Always-Adapt was slightly worse than Static in aggregate safety despite using
+{int(resources[Study4Method.ALWAYS_ADAPT.value]["labels_requested"]):,} labels. Its mean unsafe
+exposure was {float(always["unsafe_exposure_per_run"]):.2f} rather than
+{float(static["unsafe_exposure_per_run"]):.2f} windows per run, a difference of
+{float(always_static["unsafe_exposure_per_run"]["absolute_difference"]):+.2f}. Its compliance
+was {float(always_static["compliance_rate"]["absolute_percentage_point_difference"]):+.2f}
+percentage points relative to Static. The frozen Always-Adapt mechanism therefore provided no
+aggregate safety advantage over no adaptation.
+
+## Core sparsity
+
+Core achieved intervention sparsity but not supervision sparsity. It accepted
+{int(resources[Study4Method.DANIDS_CORE.value]["accepted_updates"])} updates versus
+{int(resources[Study4Method.ALWAYS_ADAPT.value]["accepted_updates"])} for Always-Adapt, a
+{abs(float(core_always["accepted_updates_per_run"]["percentage_difference"])):.2f}% reduction,
+but both methods requested
+{int(resources[Study4Method.DANIDS_CORE.value]["labels_requested"]):,} labels. Health-aware
+action selection was sparser; health-aware querying was not selective under the frozen rule.
+
+## Offline Oracle and intervention capability
+
+The non-deployable Offline Oracle's {oracle_total} sparse accepted updates support the
+minimum-intervention motivation. Nevertheless, its absolute operating-envelope compliance was
+only {100.0 * float(oracle["compliance_rate"]):.2f}%, meaning that most harm remained
+unrecoverable under the frozen B100, delayed-supervision, and A0--A4 capability regime.
+
+## Sequence dependence
+
+Core's paired safety behaviour depended on deployment sequence:
+
+{rotation_lines}
+
+This is a descriptive pattern, not a new confirmatory hypothesis.
+
+## Exploratory A3 observation
+
+{oracle_a3}/{oracle_total} Oracle model-changing selections were A3 full fine-tuning. A3 was
+prospectively excluded from normal Core. This observation is exploratory and mechanistic only;
+it must not be used to retrospectively alter Core or its confirmatory interpretation.
+"""
+
+
+def validate_study4_confirmatory_analysis(output_dir: str | Path) -> Path:
+    """Verify the canonical analysis file set and every persisted content digest."""
+
+    output = Path(output_dir).resolve()
+    manifest = _load_json(output / "analysis_manifest.json")
+    files = manifest.get("files")
+    if not isinstance(files, dict) or set(files) != set(OUTPUT_FILES):
+        raise Study4AnalysisError("Study-4 analysis manifest file set differs")
+    for name in OUTPUT_FILES:
+        expected_digest = files[name]
+        path = output / name
+        if not isinstance(expected_digest, str) or not path.is_file():
+            raise Study4AnalysisError(f"Study-4 analysis manifest entry is invalid: {name}")
+        if _file_sha256(path) != expected_digest:
+            raise Study4AnalysisError(f"Study-4 analysis file digest differs: {name}")
+    if manifest.get("bundle_digest") != _canonical_digest(files):
+        raise Study4AnalysisError("Study-4 analysis bundle digest differs")
+    return output
 
 
 def analyze_study4_confirmatory(
@@ -925,7 +1011,9 @@ def analyze_study4_confirmatory(
     overall = build_overall_table(inputs)
     paired = build_core_vs_always_table(inputs)
     headline = build_headline_results(inputs, overall, paired)
-    results_text = _thesis_results_text(inputs, overall, headline)
+    results_text = _confirmatory_results_text(inputs, overall, headline)
+    verdicts_text = _hypothesis_verdicts_text(headline)
+    discussion_text = _discussion_notes_text(overall, headline)
 
     output.mkdir(parents=True)
     _write_csv(output / "table_study4_overall.csv", overall)
@@ -936,12 +1024,20 @@ def analyze_study4_confirmatory(
     (output / "table_study4_core_vs_always.md").write_text(
         _paired_markdown(paired), encoding="utf-8", newline="\n"
     )
-    (output / "headline_results.json").write_text(
+    (output / "study4_confirmatory_results.json").write_text(
         json.dumps(headline, indent=2, sort_keys=True, allow_nan=False) + "\n",
         encoding="utf-8",
         newline="\n",
     )
-    (output / "study4_results.md").write_text(results_text, encoding="utf-8", newline="\n")
+    (output / "study4_confirmatory_results.md").write_text(
+        results_text, encoding="utf-8", newline="\n"
+    )
+    (output / "study4_hypothesis_verdicts.md").write_text(
+        verdicts_text, encoding="utf-8", newline="\n"
+    )
+    (output / "study4_discussion_notes.md").write_text(
+        discussion_text, encoding="utf-8", newline="\n"
+    )
     _save_safety_figure(overall, output / "fig_study4_safety_compliance.png")
     _save_resource_figure(overall, output / "fig_study4_resource_tradeoff.png")
     _save_paired_figure(paired, output / "fig_study4_core_vs_always_paired.png")
@@ -966,7 +1062,7 @@ def analyze_study4_confirmatory(
         encoding="utf-8",
         newline="\n",
     )
-    return output
+    return validate_study4_confirmatory_analysis(output)
 
 
 __all__ = [
@@ -979,4 +1075,5 @@ __all__ = [
     "build_overall_table",
     "determine_hypothesis_verdicts",
     "load_study4_analysis_inputs",
+    "validate_study4_confirmatory_analysis",
 ]
