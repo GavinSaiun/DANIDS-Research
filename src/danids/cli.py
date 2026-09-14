@@ -9,6 +9,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from danids.attacks import (
+    load_study5_contract,
+    validate_configured_dataset_inventory,
+    validate_materialized_inventory,
+)
 from danids.config.continual import load_continual_experiment_config
 from danids.config.core import load_study4_core_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
@@ -388,6 +393,36 @@ def _qualify_policy(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_study5_contract(args: argparse.Namespace) -> int:
+    contract = load_study5_contract(args.contract)
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    raw = validate_configured_dataset_inventory(
+        contract,
+        registry,
+        chunk_rows=args.chunk_rows,
+    )
+    materialized = validate_materialized_inventory(
+        contract,
+        registry,
+        args.manifest_dir,
+        args.materialization_root,
+        chunk_rows=args.chunk_rows,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": contract.contract_version,
+                "contract_sha256": contract.contract_sha256,
+                "raw_datasets": [item.to_dict() for item in raw],
+                "materialized_datasets": [item.to_dict() for item in materialized],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -592,6 +627,17 @@ def build_parser() -> argparse.ArgumentParser:
     qualify_policy.add_argument("--evaluation-dir", required=True, type=Path)
     qualify_policy.add_argument("--output-dir", required=True, type=Path)
     qualify_policy.set_defaults(handler=_qualify_policy)
+
+    validate_study5 = subparsers.add_parser(
+        "validate-study5-contract",
+        help="validate the frozen Study-5 ontology against raw and materialized labels",
+    )
+    validate_study5.add_argument("--contract", required=True, type=Path)
+    validate_study5.add_argument("--datasets-config", required=True, type=Path)
+    validate_study5.add_argument("--manifest-dir", required=True, type=Path)
+    validate_study5.add_argument("--materialization-root", required=True, type=Path)
+    validate_study5.add_argument("--chunk-rows", type=int, default=100_000)
+    validate_study5.set_defaults(handler=_validate_study5_contract)
     return parser
 
 

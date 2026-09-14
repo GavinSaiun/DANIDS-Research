@@ -50,6 +50,11 @@ The thesis will test four main claims.
 - **H9:** Combined health signals will generalise better to harmful-shift detection than distribution-only signals.
 - **H10:** A minimum-intervention policy will approach the safety of always-retrain while reducing supervision, updates, and forgetting.
 
+The Study-5 prospective freeze preserves these hypotheses while recording their current
+testability: H6 is `NOT_CURRENTLY_TESTABLE`, H7 is
+`PARTIALLY_TESTABLE_EXISTING_SINGLE_ORDER`, and H8 is `NOT_CURRENTLY_TESTABLE`.
+These statuses limit claims from existing artifacts; they do not rewrite the hypotheses.
+
 ## 6. Datasets
 
 ### 6.1 Core controlled benchmark
@@ -194,17 +199,47 @@ Y_{binary} \in \{Benign, Attack\}
 
 ### 14.2 Secondary task
 
-Dataset-native attack attribution. Native labels are never overwritten.
+Dataset-native attack analysis. Exact native labels are never overwritten. The primary
+Study-5 quantity conditions binary detection recall on true native labels; it is not
+native-label attribution. Attribution is a separate secondary task only when explicit
+native or semantic class predictions exist.
 
 ### 14.3 Cross-domain semantic analysis
 
-A conservative semantic ontology maps only clearly related native attack categories into common behavioural families. Ambiguous mappings remain `UNMAPPED`.
+A conservative, versioned semantic ontology maps only clearly related exact
+`(dataset_id, exact_native_label)` identities into common behavioural families. Exact
+case, punctuation, spelling, and dataset qualification are immutable; normalized labels
+are display metadata only. Ambiguous mappings remain separate dataset-qualified
+`UNMAPPED` identities and are never pooled into one class. The frozen Study-5 v1 inventory
+and mappings are defined in `configs/study5/attack_ontology_v1.yaml` and
+`docs/attack_ontology.md`.
 
 ### 14.4 History-relative attack novelty
 
-An attack family is considered previously unseen at stage \(k\) if it has not appeared in DANIDS's deployment history prior to \(D_k\).
+A mapped family is considered previously unseen at domain entry when it has not appeared
+in source initial training, source validation, or a completed earlier online domain.
+Current-domain future windows, future domains, and permanent holdouts cannot establish
+prior history, and entry status is retained throughout the domain. `UNMAPPED` attacks
+have no semantic seen/unseen status.
 
 This is not claimed to represent a real-world zero-day vulnerability.
+
+The separate field `family_label_available_before_prediction` records only legitimate
+labelled source exposure or delayed supervision released before prediction. It is not a
+claim of model knowledge.
+
+### 14.5 Family support and hidden failure
+
+For family \(f\), Study 5 reports family-conditioned binary detection recall
+\(R_f=x_f/n_f\) at the frozen deployment threshold. A family is supported only when
+\(n_f\ge50\) in one unique physical evaluation slice. Methods, seeds, repeated
+evaluations of the same rows, domains, zero-support slices, and distinct `UNMAPPED`
+labels cannot be pooled to create support. Zero support is unavailable, not zero recall.
+
+The primary hidden-family-failure event is
+\(\Delta_{\mathrm{all}}\le0.10\land\max_f\Delta_f>0.10\): aggregate binary
+attack-recall loss remains within 0.10 while at least one supported family loses more
+than 0.10.
 
 ## 15. Operational evaluation envelope
 
@@ -313,15 +348,19 @@ Robustness models:
 
 A supervised contrastive auxiliary loss may be tested as an ablation to improve attack-family geometry and novelty handling.
 
-## 19. Attack attribution and open-set extension
+## 19. Threat-level detection, attribution, and open-set extension
 
-The initial thesis must always report:
+The primary Study-5 analysis must report where physically supported:
 
-- exact native per-attack recall
-- seen vs previously unseen attack-family recall
-- macro-F1
-- worst-family recall
-- attack-family forgetting
+- exact native-label-conditioned binary recall
+- mapped semantic-family-conditioned binary recall
+- seen vs previously unseen semantic-family detection recall
+- unweighted macro and worst supported-family recall, including arg-min ties
+- attack-family forgetting with learned, maximum, final, and forgetting values retained
+
+These are family-conditioned binary detection quantities, not attribution evidence.
+Native/semantic attribution macro-F1 and related multiclass metrics require explicit
+attribution predictions and must be reported separately if that extension is implemented.
 
 The full DANIDS vision may additionally use a prototype or Mahalanobis attack-memory layer for:
 
@@ -440,11 +479,14 @@ Additional baselines (DER++, LoRA, CORAL/MMD adaptation) are secondary and shoul
 
 ### Attack-family
 
-- native-family macro-F1
-- per-family recall
-- worst-family recall
-- seen vs unseen-family recall
-- attack-family forgetting
+- exact native-label-conditioned binary recall
+- mapped semantic-family-conditioned binary recall
+- unweighted macro supported-family recall
+- worst supported-family recall and all arg-min ties
+- 95% Wilson intervals using \(z=1.95996398454\)
+- seen vs unseen semantic-family detection recall
+- attack-family forgetting with explicit learned/final lifecycle anchors
+- native/semantic attribution metrics only when explicit attribution predictions exist
 
 ### Open-set (if implemented)
 

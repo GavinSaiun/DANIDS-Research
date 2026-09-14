@@ -144,13 +144,22 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
+**TASK-007 — Study 5 ontology and estimand freeze.** The repository now contains a
+versioned, fingerprint-bound exact native-label ontology and strict validation contract.
+Study-5 family detection, physical support, domain-entry novelty, hidden-failure,
+learned/final retention, and H6--H8 scope are frozen prospectively. TASK-007 computes no
+method effects and does not run Study 5A. See
+[`docs/study5_threat_level_behaviour.md`](docs/study5_threat_level_behaviour.md) and
+[`docs/attack_ontology.md`](docs/attack_ontology.md).
+
 **TASK-006 — Study 4 intervention and DANIDS-Core.** The package provides explicit
 A0–A4 candidate actions with rollback, replay/audit capability separation, delayed
 incremental supervision, and the prospectively frozen transparent DANIDS-Core state
 machine. The chronological E4 harness executes `STATIC`, `ALWAYS_ADAPT`,
 `DANIDS_CORE`, and the non-deployable one-step `OFFLINE_ORACLE` with write-once
-provenance and artifact-only aggregation. The full confirmatory matrix was not run;
-DANIDS-Policy failed its frozen qualification gate and remains disabled. The
+provenance and artifact-only aggregation. The full confirmatory matrix completed as 48
+validated runs; DANIDS-Policy failed its frozen qualification gate and remained
+disabled. The
 `POLICY_DEVELOPMENT_V1` runner now generates isolated A0--A4 counterfactual
 action trials from five frozen roll-ins and the artifact-only evaluator reports
 physical-group-safe policy support without fitting the final policy. See

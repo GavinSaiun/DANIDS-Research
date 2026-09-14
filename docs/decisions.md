@@ -501,6 +501,190 @@ Study 1--3 outputs and the other E4 treatments are unchanged.
 
 ---
 
+## D044 — Exact Study-5 native-label identity
+
+**Date:** 2026-09-14
+
+**Old rule:** Native labels had to be preserved, but the attack ontology contained only
+candidate spellings and coarse dataset categories. It did not bind mappings to exact
+dataset fingerprints or define a fail-closed identity key.
+
+**New rule:** Study 5 uses the versioned contract
+`configs/study5/attack_ontology_v1.yaml`. Its immutable attack identity is
+`(dataset_id, exact_native_label)`, with exact case, punctuation, and spelling. Display
+normalization cannot participate in lookup. The contract contains all 36 attack
+identities, represents exact `Benign` separately for each dataset, and is bound to these
+raw-source SHA-256 values: U
+`4ebb97bd74412d566137d95a6fc3ffd8f374f1cf8cfe204d007848e7a668f9b5`, T
+`53ec8f468a43ede9b1536fabc0390af2fa33ab4312b23ce4d864f186a4651f78`, B
+`8bde1f6f1c8bc59dcb49828fb5b9d65c0b63e06d92b2b9f15b37159e923009ea`, and C
+`242a6971cc801eae621b1fc4d966db2cd0af9cc866805f36a6fc5d0058dfbb74`.
+The raw C identity remains `Infilteration`; a corrected spelling is display metadata
+only. Duplicate, missing, unknown, or mismatched identities fail validation.
+
+**Reason:** Dataset qualification and exact source binding prevent silent collisions,
+spelling drift, and post-hoc reinterpretation of native attack labels.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Study-5 native and semantic analyses. Existing Study-1,
+Study-2, and Study-4 artifacts are unchanged and are not rerun or rescored by this
+decision.
+
+## D045 — Primary Study-5 semantic ontology
+
+**Date:** 2026-09-14
+
+**Old rule:** The ontology proposed broad candidate semantic families with provisional
+confidence labels, and allowed ambiguous attacks to remain `UNMAPPED`, but no primary
+mapping set had been frozen.
+
+**New rule:** The primary semantic analysis contains exactly eight families:
+Availability / Impact, Reconnaissance / Discovery, Credential Access, Application / Web
+Injection, Interception, Ransomware Impact, Botnet / Command-and-Control, and
+Self-Propagating Malware. Only the 24 exact dataset-qualified mappings enumerated in
+ontology v1 may enter those families. The remaining twelve primary attack identities
+remain separate and `UNMAPPED`: U `Fuzzers`, `Exploits`, `Backdoor`, `Generic`,
+`Shellcode`, and `Analysis`; T `injection`, `password`, and `Backdoor`; B `Theft`; and C
+`Brute_Force_-Web` and `Infilteration`. `UNMAPPED` is never a pooled class. Candidate
+medium-confidence mappings are excluded from primary estimands and require a separately
+versioned sensitivity contract.
+
+**Reason:** Only high-confidence behavioural relationships should support primary
+cross-domain semantic claims; retaining exact members preserves native-label evidence.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Primary Study-5 semantic-family analysis. Native-label analysis
+continues to retain every exact attack identity.
+
+## D046 — Family-conditioned binary recall and support
+
+**Date:** 2026-09-14
+
+**Old rule:** Family recall, macro recall, worst-family recall, and a provisional minimum
+support of 50 were listed, but the detection estimand, physical support unit, paired
+eligibility, and interval calculation were not fixed.
+
+**New rule:** For family \(f\), \(R_f=x_f/n_f\), where \(x_f\) counts true
+family-\(f\) attacks whose binary score crosses the frozen deployment threshold. This is
+family-conditioned detection, not attribution. A family is supported only when
+\(n_f\ge50\) within one unique physical evaluation slice. Support cannot be created by
+pooling methods, seeds, repeated evaluations of identical rows, domains, zero-support
+slices, or distinct `UNMAPPED` labels. Paired methods use the same support-defined
+eligible set. Lower-support nonzero cells are descriptive only; zero-support cells are
+unavailable, not zero recall. Supported summaries are the unweighted macro recall, worst
+recall, all arg-min ties, and a 95% Wilson interval using
+\(z=1.95996398454\).
+
+**Reason:** The rule prevents pseudoreplication and unstable rare-family cells from
+entering confirmatory family-level claims while preserving descriptive evidence.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** All Study-5 native and semantic family-conditioned binary
+detection summaries and paired comparisons.
+
+## D047 — Domain-entry novelty and label availability
+
+**Date:** 2026-09-14
+
+**Old rule:** Previously unseen semantic families were history-relative, but the exact
+entry-time history, within-domain stability, and distinction between occurrence and
+legitimate labelled exposure were not specified.
+
+**New rule:** Primary semantic novelty is assigned at domain entry and retained throughout
+that domain. A mapped family is previously seen only if it appeared in source initial
+training, source validation, or a completed earlier online domain. Current-domain future
+windows, future domains, and permanent holdouts cannot establish prior history.
+`UNMAPPED` semantic novelty is `NOT_APPLICABLE`. The separate field
+`family_label_available_before_prediction` uses only labelled source exposure or delayed
+supervision legitimately released before that prediction. It is not model knowledge and
+cannot be changed retroactively by a later release.
+
+**Reason:** Occurrence history and supervised exposure answer different questions and
+must both respect chronological and holdout information boundaries.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Study-5 seen/unseen semantic analysis and supervision-aware
+descriptive reporting.
+
+## D048 — Primary hidden-family-failure estimand
+
+**Date:** 2026-09-14
+
+**Old rule:** The research specification stated that aggregate binary metrics may hide
+attack-family failures, but it did not define the event quantitatively.
+
+**New rule:** With positive recall losses relative to the applicable frozen reference,
+primary hidden family failure is
+\(\Delta_{\mathrm{all}}\le0.10\land\max_f\Delta_f>0.10\). Aggregate binary
+attack-recall loss therefore remains within 0.10 while at least one supported family
+loses more than 0.10. A SAFE-operating-envelope variant may be reported only under a
+separate name as a secondary estimand.
+
+**Reason:** A fixed asymmetric condition directly operationalises the aggregate-versus-
+family masking claim without introducing a post-hoc safety definition.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Study-5 hidden family failure reporting on eligible supported
+families.
+
+## D049 — Learned and final family-retention anchors
+
+**Date:** 2026-09-14
+
+**Old rule:** Family forgetting was required, and Study 2 defined learned-state anchors
+for aggregate metrics, but Study-specific family anchors and the no-update case in Study
+4 were not frozen together.
+
+**New rule:** Study 1 uses the source model's initial permanent-holdout evaluation as its
+source learned reference. Study 2 uses `source_initial` for the source, `post_adapt` for
+later domains, and `final` for final performance; pre-adaptation zero-shot performance
+cannot enter the learned maximum, and the final domain is excluded from aggregate
+forgetting because it has no subsequent-domain exposure. Study 4 uses `source_initial`
+for the source and, for a later domain, the final `post_accept` caused by legitimately
+released evidence from that domain. If no accepted update exists, the status is
+`NOT_LEARNED_NO_UPDATE`; `domain_end` remains separate and is not relabelled as learned.
+For a learned domain-family pair,
+\(F_{d,f}=\max_{t\ge t_{\mathrm{learned}}}R_{d,f,t}-R_{d,f,\mathrm{final}}\).
+The learned, post-learning maximum, final, and forgetting values are persisted together.
+
+**Reason:** Explicit lifecycle anchors prevent zero-shot competence, administrative
+domain closure, or missing adaptation from being mistaken for learned performance.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Study-5 family-retention analysis over existing Study-1,
+Study-2, and Study-4 artifact schemas.
+
+## D050 — Study-5 hypothesis scope and reporting strata
+
+**Date:** 2026-09-14
+
+**Old rule:** H6--H8 remained thesis hypotheses, but their testability from the existing
+binary native-metric artifacts was not recorded. Stream and holdout family metrics were
+listed without a strict no-pooling rule.
+
+**New rule:** Before Study-5 effect analysis, H6 is `NOT_CURRENTLY_TESTABLE`, H7 is
+`PARTIALLY_TESTABLE_EXISTING_SINGLE_ORDER`, and H8 is `NOT_CURRENTLY_TESTABLE`.
+Native- and semantic-family-conditioned binary recall is detection evidence, not
+attribution evidence. Prequential online-stream family detection and permanent-holdout
+family retention remain separate reporting strata and are never pooled.
+
+**Reason:** Existing artifacts can support only the claims for which the relevant
+predictions, lifecycle, and deployment-order evidence exist.
+
+**Status:** Prospectively frozen for Study 5 before family-level method-effect analysis.
+
+**Affected experiments:** Study-5 hypothesis verdicts and all stream-versus-holdout
+family reporting. The original hypotheses are preserved rather than retrospectively
+rewritten.
+
+---
+
 ## Template for future decisions
 
 ### DXXX — Short decision name
