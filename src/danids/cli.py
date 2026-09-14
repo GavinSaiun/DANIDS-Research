@@ -32,6 +32,7 @@ from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
 from danids.evaluation.study4 import evaluate_study4
 from danids.evaluation.study5 import evaluate_study5_threats
+from danids.evaluation.study5b import evaluate_study5b_replay_robustness
 from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
 from danids.experiments.health import HealthSmokeLimits, run_health_experiment
 from danids.experiments.policy_development import (
@@ -44,6 +45,12 @@ from danids.experiments.static import (
     run_static_experiment,
 )
 from danids.experiments.study4 import Study4SmokeLimits, run_study4_experiment
+from danids.experiments.study5b import (
+    Study5BLauncherError,
+    Study5BLaunchMode,
+    format_launcher_report,
+    run_study5b_launcher,
+)
 from danids.policy.development import RollIn
 from danids.policy.health_artifact import (
     build_health_model_artifact,
@@ -441,6 +448,40 @@ def _evaluate_study5_threats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _launch_study5b_replay_retention(args: argparse.Namespace) -> int:
+    mode = Study5BLaunchMode.PREFLIGHT_ONLY if args.preflight_only else Study5BLaunchMode.LAUNCH
+    report = run_study5b_launcher(
+        contract_path=args.contract,
+        mode=mode,
+        repo_root=args.repo_root,
+        datasets_config=args.datasets_config,
+        study1_run_root=args.study1_run_root,
+        manifest_root=args.manifest_root,
+        schedule_root=args.schedule_root,
+        output_root=args.output_root,
+        log_root=args.log_root,
+        quarantine_root=args.quarantine_root,
+        generate_schedules=args.generate_schedules,
+        device_name=args.device,
+        workers=args.workers,
+    )
+    print(format_launcher_report(report), end="")
+    return 0
+
+
+def _evaluate_study5b_replay_retention(args: argparse.Namespace) -> int:
+    output = evaluate_study5b_replay_robustness(
+        contract_path=args.contract,
+        task008_dir=args.task008_dir,
+        study1_run_dirs=args.study1_run_dirs,
+        study2_run_dirs=args.study2_run_dirs,
+        output_dir=args.output_dir,
+    )
+    summary = json.loads((output / "study5b_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -695,6 +736,48 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_study5.add_argument("--study4-evaluation-dir", required=True, type=Path)
     evaluate_study5.add_argument("--output-dir", required=True, type=Path)
     evaluate_study5.set_defaults(handler=_evaluate_study5_threats)
+
+    launch_study5b = subparsers.add_parser(
+        "launch-study5b-replay-retention",
+        help="preflight or serially run the frozen 27-run TASK-009 extension",
+    )
+    launch_study5b.add_argument("--contract", required=True, type=Path)
+    launch_study5b.add_argument("--repo-root", type=Path)
+    launch_study5b.add_argument("--datasets-config", type=Path)
+    launch_study5b.add_argument("--study1-run-root", type=Path)
+    launch_study5b.add_argument("--manifest-root", type=Path)
+    launch_study5b.add_argument("--schedule-root", type=Path)
+    launch_study5b.add_argument("--output-root", type=Path)
+    launch_study5b.add_argument("--log-root", type=Path)
+    launch_study5b.add_argument("--quarantine-root", type=Path)
+    launch_study5b.add_argument("--generate-schedules", action="store_true")
+    launch_study5b.add_argument("--preflight-only", action="store_true")
+    launch_study5b.add_argument("--device", default="cpu", choices=["cpu"])
+    launch_study5b.add_argument("--workers", default=1, type=int, choices=[1])
+    launch_study5b.set_defaults(handler=_launch_study5b_replay_retention)
+
+    evaluate_study5b = subparsers.add_parser(
+        "evaluate-study5b-replay-robustness",
+        help="artifact-only all-order TASK-009 replay-retention evaluation",
+    )
+    evaluate_study5b.add_argument("--contract", required=True, type=Path)
+    evaluate_study5b.add_argument("--task008-dir", required=True, type=Path)
+    evaluate_study5b.add_argument(
+        "--study1-run",
+        dest="study1_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5b.add_argument(
+        "--study2-run",
+        dest="study2_run_dirs",
+        required=True,
+        action="append",
+        type=Path,
+    )
+    evaluate_study5b.add_argument("--output-dir", required=True, type=Path)
+    evaluate_study5b.set_defaults(handler=_evaluate_study5b_replay_retention)
     return parser
 
 
@@ -703,6 +786,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+    except (FileNotFoundError, OSError, TypeError, ValueError, Study5BLauncherError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

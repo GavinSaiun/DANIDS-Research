@@ -144,6 +144,14 @@ for API guarantees and implementation assumptions.
 
 ## Current status
 
+**TASK-009 — Study 5B all-order replay-retention robustness.** The repository now
+freezes and validates a 27-run prospective extension of the Study-2 NaiveFT, ER, and
+FT-Mem comparison across the three previously missing deployment rotations. It keeps
+that extension distinct from the previously inspected U-T-C-B evidence, provides a
+serial fail-closed launcher, and defines an artifact-only 36-run H7 synthesis with
+family-, domain-, and rotation-seed-level aggregation. See
+[`docs/study5_replay_retention.md`](docs/study5_replay_retention.md).
+
 **TASK-008 — Study 5A native and semantic threat audit.** The package now provides the
 write-once `task008-study5a-threat-audit-v1` evaluator over the exact reviewed Study-1,
 Study-2, and Study-4 artifact rosters. It validates source provenance and physical support,

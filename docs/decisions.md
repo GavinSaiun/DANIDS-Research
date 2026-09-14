@@ -683,6 +683,70 @@ predictions, lifecycle, and deployment-order evidence exist.
 family reporting. The original hypotheses are preserved rather than retrospectively
 rewritten.
 
+## D051 — Study-5B all-order replay-retention extension
+
+**Date:** 2026-09-14
+
+**Old rule:** H7 was `PARTIALLY_TESTABLE_EXISTING_SINGLE_ORDER` because the reviewed
+Study-2 evidence covered only U-T-C-B with seeds 42--44. Those results were inspected
+before the remaining-order extension was designed.
+
+**New rule:** TASK-009 adds exactly NaiveFT, ER, and FT-Mem for seeds 42, 43, and 44 on
+T-C-B-U, C-B-U-T, and B-U-T-C: 27 new runs. EWC is excluded because the extension tests
+replay-aware methods against target-only full fine-tuning. The nine new rotation-seed
+units form `PROSPECTIVE_MISSING_ROTATION_EXTENSION`; the final 12-unit
+`ALL_ORDER_SYNTHESIS` combines them with the nine previously inspected U-T-C-B method
+runs and is therefore not wholly prospective.
+
+All methods retain the TASK-004 source-state, preprocessing, threshold, B100 delayed
+supervision, optimizer, adaptation-frequency, and memory contracts. Primary H7 evidence
+uses mapped semantic families with physical permanent-holdout support of at least 50 in
+the first three sequence positions; position four is excluded. Permanent-holdout rows
+never enter fitting, supervision, or memory. Within every rotation-seed trio, NaiveFT,
+ER, and FT-Mem use an identical Study-1 source state and byte-identical supervision
+schedule.
+
+For each eligible family, `L` is learned recall, `M` is the maximum supported recall at
+or after learning, `C` is final recall, `F=M-C`, and `B=C-L`. Source learning is
+`source_initial`, later-domain learning is same-domain `post_adapt`, and final is `final`;
+`pre_adapt` never enters `M` (including in a source-domain trajectory), and an exact
+maximum tie resolves to the earliest remaining event in the frozen TASK-008 chronological
+order. For replay method `a`, the effects are
+`delta_F=F_NaiveFT-F_a`, `delta_C=C_a-C_NaiveFT`, and
+`delta_B=B_a-B_NaiveFT`. The secondary descriptive exceedance effect is
+`I(F_NaiveFT>0.10)-I(F_a>0.10)` and receives no superiority verdict.
+
+ER and FT-Mem are each paired with NaiveFT by rotation, seed, previous domain, and
+semantic family. Both sides must have identical support, row range, dataset fingerprint,
+and permanent-holdout physical-slice digest. Effects are aggregated without flow
+weighting: unweighted across families within domain, then unweighted across the three
+previous domains. The rotation-seed unit, not a flow or family row, is the reporting
+unit. Native-family results remain supporting descriptive evidence.
+
+Method-by-outcome verdicts use a strict positive median and require every relevant
+rotation median to be positive for `SUPPORTED`; a positive overall median with at least
+one non-positive rotation is `PARTIALLY_SUPPORTED`; a non-positive overall median is
+`NOT_SUPPORTED`. The prospective layer uses its nine new units and three rotations; the
+all-order layer uses 12 units and four rotations. Overall H7 is `SUPPORTED` only when all
+four ER/FT-Mem by forgetting/final-competence all-order subclaims are supported, is
+`NOT_SUPPORTED` only when all four are not supported, and is otherwise
+`PARTIALLY_SUPPORTED`. Incomplete evidence is `NOT_ASSESSED_INCOMPLETE`, never evidence
+against H7.
+
+**Reason:** The extension tests whether the previously observed single-order retention
+result generalises across deployment order without choosing a replay method after seeing
+the original outcome or treating correlated family/flow rows as independent replicates.
+
+**Status:** Prospectively frozen for the three missing rotations after inspection of the
+existing U-T-C-B evidence and before any TASK-009 missing-rotation run executed. Existing
+U-order runs are `PRIOR_EXISTING_EVIDENCE` and are not selectively rerun; the 27 new runs
+are `PROSPECTIVE_EXTENSION_EVIDENCE`. The combined four-order synthesis explicitly mixes
+prior and prospectively collected evidence and records
+`evidence_status=PROSPECTIVE_ROBUSTNESS_EXTENSION_AFTER_SINGLE_ORDER_PRIOR_EVIDENCE`.
+
+**Affected experiments:** TASK-009 / Study-5B only. TASK-007, TASK-008, the existing
+U-T-C-B runs, and the Study-2 training implementation remain unchanged.
+
 ---
 
 ## Template for future decisions
