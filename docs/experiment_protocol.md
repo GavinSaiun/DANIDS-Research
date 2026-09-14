@@ -88,11 +88,13 @@ Goal: determine whether aggregate binary health hides attack-specific failure.
 
 Outputs:
 
-- native-class recall / F1
-- semantic-family recall
-- worst-family recall
-- seen vs unseen-family recall
-- attack-family forgetting
+- exact native-label-conditioned binary recall
+- mapped semantic-family-conditioned binary recall
+- supported macro and worst-family recall with arg-min ties and Wilson intervals
+- seen vs unseen semantic-family detection recall
+- hidden family failure
+- attack-family forgetting with explicit learned, maximum, final, and forgetting values
+- attribution metrics only if explicit attribution predictions are implemented
 - optional UNKNOWN rejection metrics
 
 ### E6 — External validation
@@ -289,7 +291,29 @@ Recorded:
 
 ### Attack-family metrics
 
-Recorded on permanent holdouts where support permits, and on stream windows for exploratory monitoring analyses.
+Recorded as two separate strata:
+
+- prequential online-stream family detection; and
+- permanent-holdout family retention.
+
+The strata are never pooled. Family recall is binary detection recall conditioned on a
+true exact native label or mapped semantic family at the frozen deployment threshold; it
+is not attack attribution.
+
+A family is supported only with at least 50 true family attacks in one unique physical
+evaluation slice. Methods, seeds, repeated evaluations of identical rows, domains,
+zero-support slices, and distinct `UNMAPPED` labels cannot be pooled to create support.
+Paired methods use the same support-defined eligible family set. Lower-support nonzero
+cells may be descriptive; zero-support cells are unavailable rather than zero recall.
+
+Study-specific learned references are fixed before effect analysis. Study 1 uses the
+source model's initial permanent-holdout evaluation. Study 2 uses `source_initial` for the
+source, `post_adapt` for later domains, and `final` for final performance; pre-adaptation
+zero-shot rows cannot enter the learned maximum, and the final domain is excluded from
+aggregate forgetting because it has no later-domain exposure. Study 4 uses
+`source_initial` for the source and the final legitimate-evidence `post_accept` for a
+later domain. If no such accepted update exists, the status is
+`NOT_LEARNED_NO_UPDATE`; `domain_end` remains separate.
 
 ## 12. Operating threshold calibration
 
@@ -397,6 +421,10 @@ Both are useful, but the thesis must label the distinction clearly.
 ## 19. Statistical aggregation
 
 Primary aggregation unit should be domain sequence / seed / window block, not individual flows.
+
+For Study-5 eligibility, statistical aggregation does not increase physical family
+support. Support is assessed before cross-seed or cross-method aggregation within each
+unique physical slice, and the same eligible family set is retained for paired methods.
 
 Recommended reporting:
 

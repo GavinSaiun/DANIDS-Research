@@ -1,177 +1,257 @@
-# DANIDS Attack Ontology v0.1
+# DANIDS Attack Ontology v1.0
 
-## Purpose
+## Purpose and scope
 
-DANIDS keeps **dataset-native attack labels** intact while optionally mapping clearly related behaviours into a conservative cross-domain semantic ontology.
+DANIDS preserves every dataset-native attack label while permitting a conservative,
+prospectively frozen semantic-family analysis. The ontology supports threat-level
+analysis of binary attack detection. It does not replace native labels, create a
+universal multiclass taxonomy, or establish attack attribution.
 
-The ontology exists for analysis of cross-domain attack knowledge, not to erase or replace native labels.
+The machine-readable source of truth is
+`configs/study5/attack_ontology_v1.yaml`, contract version
+`task007-study5-ontology-estimands-v1`. This document explains its scientific
+interpretation. The Study-5 ontology and estimands were frozen before inspecting any
+Study-5 method-effect summary.
 
-## Rules
+## Exact identity and dataset fingerprints
 
-1. Native labels are always retained.
-2. A semantic mapping is allowed only when there is a defensible behavioural relationship.
-3. Mapping decisions should be justified using behavioural descriptions and, where appropriate, MITRE ATT&CK / CAPEC concepts.
-4. Ambiguous labels remain `UNMAPPED`.
-5. `UNMAPPED` does **not** mean that all unmapped attacks form one class.
-6. The ontology must be frozen before confirmatory attack-family experiments.
-7. Previously unseen attack status is defined relative to semantic families already encountered in deployment history.
-
-## Native label inventory
-
-### NF-UNSW-NB15-v3
-
-Candidate native classes:
-
-- Analysis
-- Backdoor
-- DoS
-- Exploits
-- Fuzzers
-- Generic
-- Reconnaissance
-- Shellcode
-- Worms
-
-### NF-ToN-IoT-v3
-
-Candidate native classes:
-
-- Backdoor
-- DDoS
-- DoS
-- Injection
-- MITM
-- Password
-- Ransomware
-- Scanning
-- XSS
-
-### NF-BoT-IoT-v3
-
-Candidate native classes:
-
-- DDoS
-- DoS
-- Reconnaissance
-- Theft
-
-### NF-CSE-CIC-IDS2018-v3
-
-Candidate native classes:
-
-- Bot
-- BruteForce
-- DDoS
-- DoS
-- Infiltration
-- Web Attacks
-
-> Note: exact spelling and label values must be validated directly from the downloaded v3 datasets before implementation.
-
-## Initial semantic families
-
-This table is a **draft**, not yet frozen.
-
-| Semantic family | Candidate native labels | Confidence | Notes |
-|---|---|---:|---|
-| Availability / Impact | DoS, DDoS | High | Direct behavioural overlap; retain DoS vs DDoS natively even if grouped semantically. |
-| Reconnaissance / Discovery | Reconnaissance, Scanning | High–Medium | Likely defensible coarse grouping; validate dataset documentation. |
-| Credential Access | Password, BruteForce | High–Medium | Coarse credential-attack grouping; exact mechanisms may differ. |
-| Web / Injection | Injection, XSS, Web Attacks | Medium | Requires careful behavioural review before freezing. |
-| Execution / Exploitation | Exploits, Shellcode | Medium | Related but not identical; may be retained separately if evidence is weak. |
-| Malware / Persistence | Ransomware, Bot, Backdoor | Low–Medium | Too broad to freeze without explicit behavioural justification. |
-| Interception | MITM | High as standalone | Do not force into another family unless justified. |
-| Other / Unmapped | Analysis, Fuzzers, Generic, Theft, Worms, Infiltration, ambiguous cases | N/A | `UNMAPPED` is a bookkeeping state, not a shared attack class. |
-
-## Representation in code
-
-Every labelled flow should retain at least:
+The immutable mapping key is:
 
 ```text
-binary_label
-native_attack_label
-semantic_attack_family
-semantic_mapping_status
+(dataset_id, exact_native_label)
 ```
 
-Recommended values:
+Case, punctuation, spelling, and dataset qualification are part of identity. Trimming,
+case-folding, spelling correction, or other normalization must never be used for a
+lookup. A normalized or corrected label may be retained only as display metadata. In
+particular, the raw C label is `Infilteration`; `Infiltration` may be shown only as
+display metadata and is not a valid identity.
 
-```text
-semantic_mapping_status ∈ {
-    mapped_high_confidence,
-    mapped_medium_confidence,
-    unmapped,
-    benign
-}
-```
+The ontology is valid only for these exact raw-source SHA-256 fingerprints:
 
-## History-relative novelty
+| Dataset | Dataset ID | Source SHA-256 |
+|---|---:|---|
+| NF-UNSW-NB15-v3 | U | `4ebb97bd74412d566137d95a6fc3ffd8f374f1cf8cfe204d007848e7a668f9b5` |
+| NF-ToN-IoT-v3 | T | `53ec8f468a43ede9b1536fabc0390af2fa33ab4312b23ce4d864f186a4651f78` |
+| NF-BoT-IoT-v3 | B | `8bde1f6f1c8bc59dcb49828fb5b9d65c0b63e06d92b2b9f15b37159e923009ea` |
+| NF-CSE-CIC-IDS2018-v3 | C | `242a6971cc801eae621b1fc4d966db2cd0af9cc866805f36a6fc5d0058dfbb74` |
 
-Let `seen_semantic_families(k-1)` be all mapped semantic families encountered before deployment stage `k`.
+The strict loader rejects an unknown dataset, a fingerprint mismatch, a duplicate key,
+an unknown or missing label, and an invalid mapping status. Attack identities use exactly
+`MAPPED` or `UNMAPPED`. Exact `Benign` is represented separately once for each dataset;
+it has no attack mapping status and is never an attack family.
 
-For a malicious sample in stage `k`:
+Each attack row records `dataset_id`, `exact_native_label`, `mapping_status`,
+`semantic_family`, and optional `display_native_label`. Display metadata is not part of
+identity and cannot satisfy exact-label coverage.
 
-```text
-previously_unseen = semantic_family not in seen_semantic_families(k-1)
-```
+## Complete exact native-label inventory
 
-If the sample is `UNMAPPED`, novelty is reported separately rather than pretending the model knows whether its underlying semantics were previously encountered.
+The following tables exhaust the identities admitted by ontology v1. `MAPPED` means the
+identity participates in the named primary semantic family. `UNMAPPED` identities remain
+independent dataset-qualified native labels; the status does not define a pooled class.
 
-Recommended evaluation categories:
+### U — NF-UNSW-NB15-v3
 
-- `known_family_new_domain`
-- `unseen_family_new_domain`
-- `unmapped_attack_new_domain`
-- `known_family_familiar_domain` (for recurrence / retention analysis)
+| Exact native label | Primary treatment | Semantic family |
+|---|---|---|
+| `Benign` | Benign | — |
+| `Analysis` | `UNMAPPED` | — |
+| `Backdoor` | `UNMAPPED` | — |
+| `DoS` | `MAPPED` | Availability / Impact |
+| `Exploits` | `UNMAPPED` | — |
+| `Fuzzers` | `UNMAPPED` | — |
+| `Generic` | `UNMAPPED` | — |
+| `Reconnaissance` | `MAPPED` | Reconnaissance / Discovery |
+| `Shellcode` | `UNMAPPED` | — |
+| `Worms` | `MAPPED` | Self-Propagating Malware |
 
-## Native-label evaluation
+### T — NF-ToN-IoT-v3
 
-Regardless of semantic mapping, always report where statistically supported:
+| Exact native label | Primary treatment | Semantic family |
+|---|---|---|
+| `Benign` | Benign | — |
+| `Backdoor` | `UNMAPPED` | — |
+| `ddos` | `MAPPED` | Availability / Impact |
+| `dos` | `MAPPED` | Availability / Impact |
+| `injection` | `UNMAPPED` | — |
+| `mitm` | `MAPPED` | Interception |
+| `password` | `UNMAPPED` | — |
+| `ransomware` | `MAPPED` | Ransomware Impact |
+| `scanning` | `MAPPED` | Reconnaissance / Discovery |
+| `xss` | `MAPPED` | Application / Web Injection |
 
-- per-native-class recall
-- per-native-class precision
-- per-native-class F1
-- support count
-- change after adaptation
-- forgetting after later domains
+### B — NF-BoT-IoT-v3
 
-This allows the thesis to detect cases where aggregate binary performance remains strong while specific attack types collapse.
+| Exact native label | Primary treatment | Semantic family |
+|---|---|---|
+| `Benign` | Benign | — |
+| `DDoS` | `MAPPED` | Availability / Impact |
+| `DoS` | `MAPPED` | Availability / Impact |
+| `Reconnaissance` | `MAPPED` | Reconnaissance / Discovery |
+| `Theft` | `UNMAPPED` | — |
 
-## Minimum support rule
+### C — NF-CSE-CIC-IDS2018-v3
 
-Rare attack families should not trigger hard policy decisions from unstable estimates.
+| Exact native label | Primary treatment | Semantic family |
+|---|---|---|
+| `Benign` | Benign | — |
+| `Bot` | `MAPPED` | Botnet / Command-and-Control |
+| `Brute_Force_-Web` | `UNMAPPED` | — |
+| `Brute_Force_-XSS` | `MAPPED` | Application / Web Injection |
+| `DDOS_attack-HOIC` | `MAPPED` | Availability / Impact |
+| `DDOS_attack-LOIC-UDP` | `MAPPED` | Availability / Impact |
+| `DDoS_attacks-LOIC-HTTP` | `MAPPED` | Availability / Impact |
+| `DoS_attacks-GoldenEye` | `MAPPED` | Availability / Impact |
+| `DoS_attacks-Hulk` | `MAPPED` | Availability / Impact |
+| `DoS_attacks-SlowHTTPTest` | `MAPPED` | Availability / Impact |
+| `DoS_attacks-Slowloris` | `MAPPED` | Availability / Impact |
+| `FTP-BruteForce` | `MAPPED` | Credential Access |
+| `Infilteration` | `UNMAPPED` | — |
+| `SQL_Injection` | `MAPPED` | Application / Web Injection |
+| `SSH-Bruteforce` | `MAPPED` | Credential Access |
 
-Initial rule for policy-relevant family-level conclusions:
+## Frozen primary semantic mappings
 
-```text
-minimum labelled evaluation support = 50 examples
-```
+Only the following eight semantic families enter the primary semantic analysis:
 
-This value is provisional. Confidence intervals should be preferred to a rigid support threshold where practical.
+| Semantic family | Exact dataset-qualified native labels |
+|---|---|
+| Availability / Impact | U `DoS`; T `dos`, `ddos`; B `DoS`, `DDoS`; C `DoS_attacks-GoldenEye`, `DoS_attacks-Slowloris`, `DoS_attacks-SlowHTTPTest`, `DoS_attacks-Hulk`, `DDoS_attacks-LOIC-HTTP`, `DDOS_attack-LOIC-UDP`, `DDOS_attack-HOIC` |
+| Reconnaissance / Discovery | U `Reconnaissance`; B `Reconnaissance`; T `scanning` |
+| Credential Access | C `FTP-BruteForce`, `SSH-Bruteforce` |
+| Application / Web Injection | T `xss`; C `SQL_Injection`, `Brute_Force_-XSS` |
+| Interception | T `mitm` |
+| Ransomware Impact | T `ransomware` |
+| Botnet / Command-and-Control | C `Bot` |
+| Self-Propagating Malware | U `Worms` |
 
-## Ontology freeze procedure
+Every exact native label remains present inside a semantic aggregation. The aggregation
+does not overwrite or relabel its members.
 
-Before confirmatory experiments:
+## Primary `UNMAPPED` identities
 
-1. Validate exact attack label names in all four v3 datasets.
-2. Gather authoritative descriptions of each attack label from dataset documentation / original dataset papers.
-3. Map each label to behavioural concepts.
-4. Assign semantic family only where defensible.
-5. Record justification and confidence.
-6. Mark ambiguous labels `UNMAPPED`.
-7. Commit the frozen ontology and record the change in `docs/decisions.md`.
+These twelve identities are excluded from primary semantic-family estimands and remain
+available for separate native-label analysis:
 
-## Open-set extension
+- U: `Fuzzers`, `Exploits`, `Backdoor`, `Generic`, `Shellcode`, `Analysis`
+- T: `injection`, `password`, `Backdoor`
+- B: `Theft`
+- C: `Brute_Force_-Web`, `Infilteration`
 
-If explicit UNKNOWN rejection is implemented later, the semantic ontology will support the following lifecycle:
+They must never be pooled into an `UNMAPPED` class. Candidate medium-confidence mappings
+may be documented for a separately named sensitivity analysis, but none is part of the
+v1 primary ontology. Adding one requires a new version and an explicit decision-log entry.
 
-```text
-malicious flow
-    -> compare with known semantic/native attack knowledge
-    -> KNOWN family or UNKNOWN
-    -> analyst feedback after delay
-    -> optional assimilation into attack memory
-    -> future retention evaluation
-```
+## Family-conditioned binary detection recall
 
-This extension must not redefine previously unseen classes using future information.
+For native or mapped semantic family \(f\):
+
+\[
+R_f = \frac{x_f}{n_f},
+\]
+
+where \(n_f\) is the number of true family-\(f\) attacks in the evaluation slice and
+\(x_f\) is the number whose binary attack score crossed the frozen deployment threshold.
+This is family-conditioned binary detection recall, not native-label or semantic-family
+attribution.
+
+## Support, summaries, and uncertainty
+
+A family is supported only when \(n_f \ge 50\) inside one unique physical evaluation
+slice. A physical slice is defined by the dataset fingerprint, reporting stratum, exact
+row set or interval, and evaluation occasion. Support must not be manufactured by pooling
+methods, seeds, repeated evaluations of identical rows, domains, zero-support slices, or
+distinct `UNMAPPED` labels.
+
+Paired methods use the same support-defined eligible family set. A nonzero cell below 50
+may be reported descriptively but cannot enter supported macro, worst-family, hidden-
+failure, or forgetting claims. A zero-support cell is unavailable, not zero recall.
+
+For the supported eligible set, report:
+
+- unweighted macro supported-family recall;
+- worst supported-family recall;
+- every arg-min family when the minimum is tied; and
+- a 95% Wilson interval using \(z = 1.95996398454\).
+
+With \(\hat p=x/n\), the Wilson centre and half-width are:
+
+\[
+c = \frac{\hat p + z^2/(2n)}{1+z^2/n}, \qquad
+h = \frac{z\sqrt{\hat p(1-\hat p)/n+z^2/(4n^2)}}{1+z^2/n}.
+\]
+
+The interval is \([c-h,c+h]\).
+
+## Domain-entry novelty and label availability
+
+Primary semantic novelty is fixed at domain entry. A mapped family is previously seen
+only when it appeared in source initial training, source validation, or a completed
+earlier online domain. Current-domain future windows, future domains, and permanent
+holdouts cannot establish prior history. Entry status remains unchanged throughout the
+domain. An `UNMAPPED` identity has no semantic seen/unseen status.
+
+For mapped families, `family_label_available_before_prediction` records a separate
+supervision fact. It is based only on labelled source exposure or delayed supervision
+legitimately released before that prediction. A label released after prediction cannot
+change the field retroactively. The field must not be described as model knowledge.
+
+Semantic novelty therefore describes prior deployment occurrence; label availability
+describes legitimate supervised exposure. Neither may use permanent-holdout labels.
+
+## Hidden family failure
+
+Let \(\Delta_{\mathrm{all}}\) be positive aggregate binary attack-recall loss and
+\(\Delta_f\) the corresponding positive supported family-recall loss relative to the
+applicable frozen reference. The primary hidden-family-failure estimand is:
+
+\[
+\Delta_{\mathrm{all}} \le 0.10
+\quad\land\quad
+\max_f \Delta_f > 0.10.
+\]
+
+Thus aggregate binary attack-recall loss remains within 0.10 while at least one supported
+family loses more than 0.10. A SAFE-operating-envelope variant may be reported only under
+a separate name as a secondary estimand; it cannot replace this definition.
+
+## Learned and final family performance
+
+Learned-state references are study-specific:
+
+- **Study 1:** the source learned reference is the source model's initial permanent-
+  holdout evaluation.
+- **Study 2:** source learning is `source_initial`; a later domain is learned at
+  `post_adapt`; final is `final`. Pre-adaptation zero-shot performance cannot enter the
+  learned maximum. The final domain is excluded from aggregate forgetting because it has
+  no subsequent-domain exposure.
+- **Study 4:** source learning is `source_initial`; a later domain is learned at the last
+  `post_accept` caused by legitimately released evidence from that domain. If none exists,
+  its status is `NOT_LEARNED_NO_UPDATE`. `domain_end` is retained separately and must not
+  be relabelled as learned.
+
+For learned domain-family pair \((d,f)\):
+
+\[
+F_{d,f} = \max_{t \ge t_{\mathrm{learned}}} R_{d,f,t}
+          - R_{d,f,\mathrm{final}}.
+\]
+
+The learned value, post-learning maximum, final value, and forgetting value must be
+persisted together.
+
+## Reporting strata and hypothesis scope
+
+Prequential online-stream family detection and permanent-holdout family retention are
+separate reporting strata. Their rows and support must never be pooled.
+
+Before Study-5 effect analysis, hypothesis scope is:
+
+- H6: `NOT_CURRENTLY_TESTABLE`
+- H7: `PARTIALLY_TESTABLE_EXISTING_SINGLE_ORDER`
+- H8: `NOT_CURRENTLY_TESTABLE`
+
+The H6 and H8 statuses reflect the absence of the required attribution and structured-
+embedding/open-set comparisons. H7 can be examined only within the existing single-order
+Study-2 evidence. These statuses do not alter the original hypotheses.

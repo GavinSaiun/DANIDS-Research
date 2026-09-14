@@ -263,6 +263,25 @@ def materialize_dataset(
     return MaterializedDataset.open(destination, manifest)
 
 
+def open_existing_materialized_dataset(
+    cache_root: str | Path,
+    manifest: SplitManifest,
+) -> MaterializedDataset:
+    """Open the exact deterministic cache for a manifest without creating it.
+
+    This read-only capability is intentionally separate from
+    :func:`materialize_dataset`: validation callers must fail if the cache is
+    absent and must never create scientific data as a side effect.
+    """
+
+    destination = Path(cache_root) / f"{manifest.dataset_id}-{_cache_key(manifest)}"
+    if not (destination / "metadata.json").is_file():
+        raise DataLoadingError(
+            f"existing materialized cache is missing for manifest identity: {destination}"
+        )
+    return MaterializedDataset.open(destination, manifest)
+
+
 class MaterializedDataset:
     """Read-only NumPy-memmap view of one chronologically ordered domain."""
 

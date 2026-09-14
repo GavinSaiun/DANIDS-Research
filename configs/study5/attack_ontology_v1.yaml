@@ -1,0 +1,400 @@
+contract_version: task007-study5-ontology-estimands-v1
+contract_sha256: f7642205ad6271c150ee47e64a7808dfb75f48c2b1d55db0df1a3e72762f368a
+scientific_status: PROSPECTIVELY_FROZEN_BEFORE_STUDY5_EFFECT_ANALYSIS
+
+identity:
+  mapping_key: [dataset_id, exact_native_label]
+  normalization_is_identity: false
+  normalized_labels_are_display_metadata_only: true
+  benign_exact_native_label: Benign
+  unmapped_is_pooled_family: false
+
+datasets:
+  U:
+    dataset_name: NF-UNSW-NB15-v3
+    sha256: 4ebb97bd74412d566137d95a6fc3ffd8f374f1cf8cfe204d007848e7a668f9b5
+    benign:
+      exact_native_label: Benign
+      binary_target: 0
+      support: {total: 2237731, initial_train: 1376795, source_validation: 429243, later_online: 1806038, permanent_holdout: 431693}
+  T:
+    dataset_name: NF-ToN-IoT-v3
+    sha256: 53ec8f468a43ede9b1536fabc0390af2fa33ab4312b23ce4d864f186a4651f78
+    benign:
+      exact_native_label: Benign
+      binary_target: 0
+      support: {total: 16792214, initial_train: 12099232, source_validation: 2205414, later_online: 14304646, permanent_holdout: 2487568}
+  B:
+    dataset_name: NF-BoT-IoT-v3
+    sha256: 8bde1f6f1c8bc59dcb49828fb5b9d65c0b63e06d92b2b9f15b37159e923009ea
+    benign:
+      exact_native_label: Benign
+      binary_target: 0
+      support: {total: 51989, initial_train: 50086, source_validation: 531, later_online: 50617, permanent_holdout: 1372}
+  C:
+    dataset_name: NF-CSE-CIC-IDS2018-v3
+    sha256: 242a6971cc801eae621b1fc4d966db2cd0af9cc866805f36a6fc5d0058dfbb74
+    benign:
+      exact_native_label: Benign
+      binary_target: 0
+      support: {total: 17514626, initial_train: 9864433, source_validation: 3939062, later_online: 13803495, permanent_holdout: 3711131}
+
+semantic_families:
+  - Availability / Impact
+  - Reconnaissance / Discovery
+  - Credential Access
+  - Application / Web Injection
+  - Interception
+  - Ransomware Impact
+  - Botnet / Command-and-Control
+  - Self-Propagating Malware
+
+# Each attack is identified only by this exact dataset-qualified pair. A display
+# label is metadata and cannot participate in lookup or semantic aggregation.
+native_attacks:
+  - dataset_id: U
+    exact_native_label: Analysis
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 1226, initial_train: 514, source_validation: 269, later_online: 783, permanent_holdout: 443}
+  - dataset_id: U
+    exact_native_label: Backdoor
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 4659, initial_train: 3188, source_validation: 173, later_online: 3361, permanent_holdout: 1298}
+  - dataset_id: U
+    exact_native_label: DoS
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 5980, initial_train: 1737, source_validation: 2351, later_online: 4088, permanent_holdout: 1892}
+  - dataset_id: U
+    exact_native_label: Exploits
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 42748, initial_train: 13132, source_validation: 15480, later_online: 28612, permanent_holdout: 14136}
+  - dataset_id: U
+    exact_native_label: Fuzzers
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 33816, initial_train: 11880, source_validation: 11616, later_online: 23496, permanent_holdout: 10320}
+  - dataset_id: U
+    exact_native_label: Generic
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 19651, initial_train: 5596, source_validation: 7247, later_online: 12843, permanent_holdout: 6808}
+  - dataset_id: U
+    exact_native_label: Reconnaissance
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Reconnaissance / Discovery
+    display_native_label: null
+    support: {total: 17074, initial_train: 5380, source_validation: 5839, later_online: 11219, permanent_holdout: 5855}
+  - dataset_id: U
+    exact_native_label: Shellcode
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 2381, initial_train: 982, source_validation: 807, later_online: 1789, permanent_holdout: 592}
+  - dataset_id: U
+    exact_native_label: Worms
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Self-Propagating Malware
+    display_native_label: null
+    support: {total: 158, initial_train: 50, source_validation: 60, later_online: 110, permanent_holdout: 48}
+
+  - dataset_id: T
+    exact_native_label: Backdoor
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 203384, initial_train: 0, source_validation: 0, later_online: 0, permanent_holdout: 203384}
+  - dataset_id: T
+    exact_native_label: ddos
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 4141256, initial_train: 2468714, source_validation: 1672542, later_online: 4141256, permanent_holdout: 0}
+  - dataset_id: T
+    exact_native_label: dos
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 203456, initial_train: 203456, source_validation: 0, later_online: 203456, permanent_holdout: 0}
+  - dataset_id: T
+    exact_native_label: injection
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 381777, initial_train: 381777, source_validation: 0, later_online: 381777, permanent_holdout: 0}
+  - dataset_id: T
+    exact_native_label: mitm
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Interception
+    display_native_label: null
+    support: {total: 6013, initial_train: 0, source_validation: 0, later_online: 0, permanent_holdout: 6013}
+  - dataset_id: T
+    exact_native_label: password
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 1594777, initial_train: 0, source_validation: 1594777, later_online: 1594777, permanent_holdout: 0}
+  - dataset_id: T
+    exact_native_label: ransomware
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Ransomware Impact
+    display_native_label: null
+    support: {total: 3971, initial_train: 0, source_validation: 0, later_online: 0, permanent_holdout: 3971}
+  - dataset_id: T
+    exact_native_label: scanning
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Reconnaissance / Discovery
+    display_native_label: null
+    support: {total: 1358977, initial_train: 1358977, source_validation: 0, later_online: 1358977, permanent_holdout: 0}
+  - dataset_id: T
+    exact_native_label: xss
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Application / Web Injection
+    display_native_label: null
+    support: {total: 2834435, initial_train: 0, source_validation: 31319, later_online: 31319, permanent_holdout: 2803116}
+
+  - dataset_id: B
+    exact_native_label: DDoS
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 7150882, initial_train: 380876, source_validation: 3386231, later_online: 3767107, permanent_holdout: 3383775}
+  - dataset_id: B
+    exact_native_label: DoS
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 8034190, initial_train: 8034190, source_validation: 0, later_online: 8034190, permanent_holdout: 0}
+  - dataset_id: B
+    exact_native_label: Reconnaissance
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Reconnaissance / Discovery
+    display_native_label: null
+    support: {total: 1695132, initial_train: 1695132, source_validation: 0, later_online: 1695132, permanent_holdout: 0}
+  - dataset_id: B
+    exact_native_label: Theft
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 1615, initial_train: 0, source_validation: 0, later_online: 0, permanent_holdout: 1615}
+
+  - dataset_id: C
+    exact_native_label: Bot
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Botnet / Command-and-Control
+    display_native_label: null
+    support: {total: 207703, initial_train: 0, source_validation: 0, later_online: 0, permanent_holdout: 207703}
+  - dataset_id: C
+    exact_native_label: Brute_Force_-Web
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: null
+    support: {total: 1618, initial_train: 1482, source_validation: 136, later_online: 1618, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: Brute_Force_-XSS
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Application / Web Injection
+    display_native_label: null
+    support: {total: 480, initial_train: 452, source_validation: 28, later_online: 480, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DDOS_attack-HOIC
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 1032311, initial_train: 1032311, source_validation: 0, later_online: 1032311, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DDOS_attack-LOIC-UDP
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 3450, initial_train: 3450, source_validation: 0, later_online: 3450, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DDoS_attacks-LOIC-HTTP
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 288589, initial_train: 288589, source_validation: 0, later_online: 288589, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DoS_attacks-GoldenEye
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 61300, initial_train: 61300, source_validation: 0, later_online: 61300, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DoS_attacks-Hulk
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 100076, initial_train: 100076, source_validation: 0, later_online: 100076, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DoS_attacks-SlowHTTPTest
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 105550, initial_train: 105550, source_validation: 0, later_online: 105550, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: DoS_attacks-Slowloris
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Availability / Impact
+    display_native_label: null
+    support: {total: 36040, initial_train: 36040, source_validation: 0, later_online: 36040, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: FTP-BruteForce
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Credential Access
+    display_native_label: null
+    support: {total: 386720, initial_train: 386720, source_validation: 0, later_online: 386720, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: Infilteration
+    binary_target: 1
+    mapping_status: UNMAPPED
+    semantic_family: null
+    display_native_label: Infiltration
+    support: {total: 188152, initial_train: 0, source_validation: 83880, later_online: 83880, permanent_holdout: 104272}
+  - dataset_id: C
+    exact_native_label: SQL_Injection
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Application / Web Injection
+    display_native_label: null
+    support: {total: 440, initial_train: 440, source_validation: 0, later_online: 440, permanent_holdout: 0}
+  - dataset_id: C
+    exact_native_label: SSH-Bruteforce
+    binary_target: 1
+    mapping_status: MAPPED
+    semantic_family: Credential Access
+    display_native_label: null
+    support: {total: 188474, initial_train: 188474, source_validation: 0, later_online: 188474, permanent_holdout: 0}
+
+estimands:
+  family_conditioned_binary_recall:
+    identifier: FAMILY_CONDITIONED_BINARY_RECALL
+    numerator: TRUE_FAMILY_ATTACKS_WITH_BINARY_SCORE_AT_OR_ABOVE_FROZEN_THRESHOLD
+    denominator: TRUE_FAMILY_ATTACKS
+    task: BINARY_DETECTION
+    is_attribution_evidence: false
+
+  support:
+    minimum_evaluation_support: 50
+    comparison: GREATER_THAN_OR_EQUAL
+    unit: UNIQUE_PHYSICAL_EVALUATION_SLICE
+    forbidden_pooling:
+      - METHODS
+      - SEEDS
+      - REPEATED_EVALUATIONS_OF_IDENTICAL_ROWS
+      - DOMAINS
+      - ZERO_SUPPORT_SLICES
+      - DISTINCT_UNMAPPED_NATIVE_LABELS
+    paired_methods_share_eligible_set: true
+    low_nonzero_support: DESCRIPTIVE_ONLY
+    zero_support: UNAVAILABLE_NOT_ZERO
+
+  novelty:
+    assignment: DOMAIN_ENTRY
+    prior_history_sources:
+      - SOURCE_INITIAL_TRAINING
+      - SOURCE_VALIDATION
+      - COMPLETED_EARLIER_ONLINE_DOMAIN
+    forbidden_history_sources:
+      - CURRENT_DOMAIN_FUTURE_WINDOWS
+      - FUTURE_DOMAINS
+      - PERMANENT_HOLDOUTS
+    retain_status_through_domain: true
+    family_label_available_before_prediction_field: family_label_available_before_prediction
+    label_availability_sources:
+      - LEGITIMATE_SOURCE_EXPOSURE
+      - RELEASED_DELAYED_SUPERVISION
+    label_availability_is_model_knowledge: false
+    unmapped_semantic_novelty: NOT_APPLICABLE
+
+  hidden_family_failure:
+    identifier: HIDDEN_FAMILY_FAILURE_PRIMARY
+    aggregate_loss_operator: LESS_THAN_OR_EQUAL
+    aggregate_loss_limit: 0.10
+    family_loss_operator: GREATER_THAN
+    family_loss_limit: 0.10
+    family_scope: SUPPORTED_FAMILIES
+    logic: AND
+
+  learned_references:
+    study1:
+      source_learned_reference: SOURCE_INITIAL_PERMANENT_HOLDOUT_EVALUATION
+    study2:
+      source_learned_reference: source_initial
+      later_domain_learned_reference: post_adapt
+      final_reference: final
+      pre_adapt_in_learned_maximum: false
+      exclude_final_domain_from_aggregate_forgetting: true
+    study4:
+      source_learned_reference: source_initial
+      later_domain_event: post_accept
+      later_domain_event_selection: FINAL_EVENT_CAUSED_BY_LEGITIMATELY_RELEASED_EVIDENCE_FROM_SAME_DOMAIN
+      no_accepted_update: NOT_LEARNED_NO_UPDATE
+      preserved_nonlearned_reference: domain_end
+      domain_end_is_learned: false
+
+  family_forgetting:
+    definition: MAX_RECALL_AT_OR_AFTER_LEARNED_MINUS_FINAL_RECALL
+    learned_time_inclusive: true
+    persist_fields: [learned_recall, maximum_recall, final_recall, forgetting]
+
+  supported_summaries:
+    macro: UNWEIGHTED_MEAN_SUPPORTED_FAMILY_RECALL
+    worst: MINIMUM_SUPPORTED_FAMILY_RECALL
+    persist_arg_min_family: true
+    persist_all_arg_min_ties: true
+    interval: WILSON_95_PERCENT
+    wilson_z: 1.95996398454
+
+hypothesis_scope:
+  H6: NOT_CURRENTLY_TESTABLE
+  H7: PARTIALLY_TESTABLE_EXISTING_SINGLE_ORDER
+  H8: NOT_CURRENTLY_TESTABLE
+
+reporting_strata:
+  values:
+    - PREQUENTIAL_ONLINE_STREAM_FAMILY_DETECTION
+    - PERMANENT_HOLDOUT_FAMILY_RETENTION
+  pooling_across_strata: false
