@@ -1,0 +1,8 @@
+| Research question | Frozen wording | Study evidence | Hypotheses | Home chapter | Final answer |
+| --- | --- | --- | --- | --- | --- |
+| RQ1 | How does sequential domain deployment affect IDS performance? | Studies 1–2 | H1; H4; H10 | Chapter 4 | Shift is directional; scheduled repair was unreliable. |
+| RQ2 | Can observable health signals identify operating-envelope violations? | Study 3 | H2; H3; H9 | Chapter 5 | Same-window harm screening recognised many violations, with false-alarm burden. |
+| RQ3 | Can selective intervention restore safety with fewer resources? | Study 4 | H4; H10 | Chapter 6 | Core reduced accepted updates, not labels, and comparable safety was not supported. |
+| RQ4 | How do threat families and deployment order shape retention? | Studies 5A–5B | H6; H7; H8 | Chapter 7 | Family support was sparse and replay benefit was not order-robust. |
+| RQ5 | What does DANIDS establish about recognition versus repair? | Synthesis | All frozen hypotheses | Chapter 8 | Operational harm was easier to recognise than repair under the frozen regime. |
+| Frozen ledger | H1 SUPPORTED; H2 SUPPORTED; H3 NOT_SUPPORTED; H4 NOT_SUPPORTED; H6 NOT_TESTABLE; H7 NOT_SUPPORTED; H8 NOT_TESTABLE; H9 PARTIAL; H10 PARTIAL | — | — | docs/thesis_evidence_freeze.md | Verbatim status record |

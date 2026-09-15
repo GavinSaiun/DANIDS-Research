@@ -33,6 +33,7 @@ from danids.evaluation.study3 import evaluate_health_study3
 from danids.evaluation.study4 import evaluate_study4
 from danids.evaluation.study5 import evaluate_study5_threats
 from danids.evaluation.study5b import evaluate_study5b_replay_robustness
+from danids.evaluation.thesis_assets import generate_thesis_assets
 from danids.experiments.continual import ContinualSmokeLimits, run_continual_experiment
 from danids.experiments.health import HealthSmokeLimits, run_health_experiment
 from danids.experiments.policy_development import (
@@ -482,6 +483,26 @@ def _evaluate_study5b_replay_retention(args: argparse.Namespace) -> int:
     return 0
 
 
+def _generate_thesis_assets(args: argparse.Namespace) -> int:
+    repo_root = Path(args.repo_root or Path.cwd()).resolve()
+    output_root = Path(args.output_dir).resolve() if args.output_dir else None
+    manifest = generate_thesis_assets(repo_root, output_root)
+    resolved_output = output_root or repo_root / "thesis" / "assets"
+    print(
+        json.dumps(
+            {
+                "output_directory": str(resolved_output),
+                "display_count": manifest["display_count"],
+                "figure_count": manifest["figure_count"],
+                "table_count": manifest["table_count"],
+                "status": "valid",
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -778,6 +799,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_study5b.add_argument("--output-dir", required=True, type=Path)
     evaluate_study5b.set_defaults(handler=_evaluate_study5b_replay_retention)
+
+    thesis_assets = subparsers.add_parser(
+        "generate-thesis-assets",
+        help="generate and verify the frozen artifact-only DANIDS thesis display pack",
+    )
+    thesis_assets.add_argument("--repo-root", type=Path)
+    thesis_assets.add_argument("--output-dir", type=Path)
+    thesis_assets.set_defaults(handler=_generate_thesis_assets)
     return parser
 
 

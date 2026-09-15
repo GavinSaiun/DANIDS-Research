@@ -1,0 +1,566 @@
+{
+  "artifact_version": "danids-thesis-assets-v1",
+  "display_count": 14,
+  "displays": [
+    {
+      "chapter": "Chapter 1",
+      "display_id": "F1",
+      "display_type": "figure",
+      "frozen_takeaway": "Deployment shift, observable health, intervention and retained competence are related but non-equivalent problems.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f1",
+      "output_files": [
+        {
+          "bytes": 10179,
+          "path": "svg/F01_danids_pipeline.svg",
+          "sha256": "1c7902f898e5460d73cd049c6f4442a419d00b74423040f3d22e8304a0f208af"
+        },
+        {
+          "bytes": 19550,
+          "path": "pdf/F01_danids_pipeline.pdf",
+          "sha256": "bb4457acea4c2fcd3c920a1c640ce76750785e50a83150353fb7f5cd5b188e01"
+        },
+        {
+          "bytes": 148081,
+          "path": "png/F01_danids_pipeline.png",
+          "sha256": "9e9a1de13b5a88a05a6ba109acb3bed5cb5913633301eb38fd4ea8cf0942b28a"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+        },
+        {
+          "path": "docs/decisions.md",
+          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 3",
+      "display_id": "F2",
+      "display_type": "figure",
+      "frozen_takeaway": "The prequential protocol separates policy-visible information from evaluator-only truth and permanent holdouts.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f2",
+      "output_files": [
+        {
+          "bytes": 15721,
+          "path": "svg/F02_protocol_information_boundary.svg",
+          "sha256": "6defb858c839ed68b5e18c03cebff6729859ed605699265b7d8113f831046624"
+        },
+        {
+          "bytes": 25201,
+          "path": "pdf/F02_protocol_information_boundary.pdf",
+          "sha256": "aa5d92607039eb996e36740d74469db2df87e3b6ea33c992eff81dc8de32090e"
+        },
+        {
+          "bytes": 241781,
+          "path": "png/F02_protocol_information_boundary.png",
+          "sha256": "7b95cbede8a44a2024ecfaaf5e0f61948b3858c0688d4d558f39325581e19e63"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+        },
+        {
+          "path": "docs/decisions.md",
+          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 4",
+      "display_id": "F3",
+      "display_type": "figure",
+      "frozen_takeaway": "Static transfer is directional and target-dependent, with operational false-alarm burden distinct from recall.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f3",
+      "output_files": [
+        {
+          "bytes": 38937,
+          "path": "svg/F03_static_transfer.svg",
+          "sha256": "dd1f4860135d00cfcf7148f8bcb0a91299dc275692a58c1b9fae0101133eca00"
+        },
+        {
+          "bytes": 28565,
+          "path": "pdf/F03_static_transfer.pdf",
+          "sha256": "ba41806e99e141685bd300e313ba44001164ea5c21e26aaf47dfefd338c51688"
+        },
+        {
+          "bytes": 243938,
+          "path": "png/F03_static_transfer.png",
+          "sha256": "1be5d680a654b3f5583206c6df4dba8ba165f89485c1f0887eff39ed0ec73e12"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study1/static-s42-s44/study1_seed_summary.csv",
+          "sha256": "e4d07b94c3a26ea137ee2ad16bfb522aedde28dea266463ad19a1059fc1f2448"
+        },
+        {
+          "path": "study1/static-s42-s44/study1_transfer_long.csv",
+          "sha256": "352d41f86010d6456a167f2a55da32000081e2a456ced9544ecaad11db57315f"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 4",
+      "display_id": "F4",
+      "display_type": "figure",
+      "frozen_takeaway": "Representational retention and frozen-threshold operation are distinct; scheduled adaptation did not reliably restore safety.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f4",
+      "output_files": [
+        {
+          "bytes": 71128,
+          "path": "svg/F04_adaptation_tradeoff.svg",
+          "sha256": "5304a49be96381423cedafaaeff42f6cd608fe0bcdddd6586f1eaa1af57eecd5"
+        },
+        {
+          "bytes": 28430,
+          "path": "pdf/F04_adaptation_tradeoff.pdf",
+          "sha256": "fe95836cfb1e7edec6d44b98785c679f844b389b5c4325e812a10bc77a1ea899"
+        },
+        {
+          "bytes": 273179,
+          "path": "png/F04_adaptation_tradeoff.png",
+          "sha256": "740641674f1b26ef29caa1258b6063044afda2460c70883369b93a60fa44cd5a"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study2/u-t-c-b-s42-s44/study2_method_summary.csv",
+          "sha256": "37bfa21edd92d9407499755b57c752533ddc1d9558eb38dafc02540c29741d9d"
+        },
+        {
+          "path": "study2/u-t-c-b-s42-s44/study2_forgetting.csv",
+          "sha256": "11c53aa12f70bb66634c50e3d9a62babe873ea7ae4a6a753af1ece9a6a418a5e"
+        },
+        {
+          "path": "study2/u-t-c-b-s42-s44/study2_final_holdouts.csv",
+          "sha256": "325cb417d87b63b9134f623ec7d23c486778a747d1e7b4acd94b4bacca6d9d97"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 5",
+      "display_id": "F5",
+      "display_type": "figure",
+      "frozen_takeaway": "Same-window harm screening can recognise many violations, but health states are imbalanced and signal relationships vary by domain.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f5",
+      "output_files": [
+        {
+          "bytes": 47388,
+          "path": "svg/F05_model_health.svg",
+          "sha256": "b70094f7fb4ee2161521fd5952f4fb406ceaeee8c67637a68f1169ad18c5d24e"
+        },
+        {
+          "bytes": 22855,
+          "path": "pdf/F05_model_health.pdf",
+          "sha256": "a2039d19eb0283dc32ba8d628230898630fc81da60f6abf09ae1e8604406154a"
+        },
+        {
+          "bytes": 392973,
+          "path": "png/F05_model_health.png",
+          "sha256": "968f4c398f3138dfe3cdd956ea334d47ef07c4949d288dca2b9f8d1231ee4084"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study3/health-s42-s44/study3_state_prevalence.csv",
+          "sha256": "71bc19571009a13cf962555d755dd1393bdb9cd02f2bd3a852e8b382b3e49a45"
+        },
+        {
+          "path": "study3/health-s42-s44/study3_model_summary.csv",
+          "sha256": "956b03f79a8c61d45e311b9b73958336c5153880d04f75520002db557f56bfde"
+        },
+        {
+          "path": "study3/health-s42-s44/study3_shift_harm_correlations.csv",
+          "sha256": "9d3f10f8ffc0b163337dd2868a10548853c23e896342d9a1d36b7c83c18447d9"
+        },
+        {
+          "path": "study3/health-s42-s44/study3_summary.json",
+          "sha256": "975bcb6fded4a67d0bb350184494db58b2652e04e1a3844cdc16d2b6e8f93c1c"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 6",
+      "display_id": "F6",
+      "display_type": "figure",
+      "frozen_takeaway": "DANIDS-Core acts only on permitted health and released evidence, with audit-gated acceptance and exact rollback.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f6",
+      "output_files": [
+        {
+          "bytes": 14784,
+          "path": "svg/F06_core_state_machine.svg",
+          "sha256": "51cc33202974d6912e023d39e5aafc6e4b62ab68c18c0cbbd91f2d9395789e19"
+        },
+        {
+          "bytes": 23627,
+          "path": "pdf/F06_core_state_machine.pdf",
+          "sha256": "a4b5871679656f3a753eb3cde638ea0d4106cafa70505f3940d30f95ec62195e"
+        },
+        {
+          "bytes": 262742,
+          "path": "png/F06_core_state_machine.png",
+          "sha256": "aff4b177055f47b86903129c4469eb2c3502a1ebd024aca846e104cb9d1ece62"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+        },
+        {
+          "path": "docs/decisions.md",
+          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 6",
+      "display_id": "F7",
+      "display_type": "figure",
+      "frozen_takeaway": "Core reduced accepted update frequency, not labels, and did not achieve comparable safety; sequence mattered.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f7",
+      "output_files": [
+        {
+          "bytes": 99720,
+          "path": "svg/F07_study4_safety_resource.svg",
+          "sha256": "9a0dbf2abaefd7672aa39c8fcd4aad29a2f52d74815276263f7df9b276476e7e"
+        },
+        {
+          "bytes": 32091,
+          "path": "pdf/F07_study4_safety_resource.pdf",
+          "sha256": "7c722f988f924c3e519cab0bd86f2baea79c5ac2dd7e29eadf71ffeea3bf9777"
+        },
+        {
+          "bytes": 357522,
+          "path": "png/F07_study4_safety_resource.png",
+          "sha256": "aa4f2bbe4ff95bfeeebcb802f73c6b03649e92c059bb46b76efdab7d87d57d24"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study4/e4-confirmatory-final/study4_safety_compliance.csv",
+          "sha256": "82a0a4816698c70c5d3584469577326c25f2a1f1afb8c392f462981ab3324d48"
+        },
+        {
+          "path": "study4/e4-confirmatory-final/study4_label_query_usage.csv",
+          "sha256": "75abc36569643b654bfb391449008f0042dc3a5e91bfc0cce5a75bc704dcd955"
+        },
+        {
+          "path": "study4/e4-confirmatory-final/study4_action_distribution.csv",
+          "sha256": "f386a79518075afd3fb655ec75a3c20fcb9788e133ad16d695256fd536f27e4a"
+        },
+        {
+          "path": "study4/e4-confirmatory-final/study4_core_vs_always_paired.csv",
+          "sha256": "d262102f16f58259955e85307aaea745808d8a4c42757b7a7951e2ac68d71782"
+        },
+        {
+          "path": "study4/e4-confirmatory-analysis/study4_confirmatory_results.json",
+          "sha256": "53948a496fe2f7f04be56400a353f6e14857efb90c6dd56bc760d0e722ce8665"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 7",
+      "display_id": "F8",
+      "display_type": "figure",
+      "frozen_takeaway": "Aggregate recall can conceal family-conditioned binary detection failures, while learned-reference availability is sparse.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f8",
+      "output_files": [
+        {
+          "bytes": 36300,
+          "path": "svg/F08_family_failure.svg",
+          "sha256": "64a69ddcfd4ca1c92de1049a704b11abe3b55c2085c19c68eb34b6b8835569d7"
+        },
+        {
+          "bytes": 17032,
+          "path": "pdf/F08_family_failure.pdf",
+          "sha256": "62be7bebed49821254e6616bab6f73ca11850587bcb27fce0dba940c461422cf"
+        },
+        {
+          "bytes": 266048,
+          "path": "png/F08_family_failure.png",
+          "sha256": "e6a2eb7b8ec57443da8d07674efe9733474bc3150e56064d6097cfa0b81d7d80"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study5/threat-audit-v1/hidden_family_failures.csv",
+          "sha256": "05cc12e71eee1a8a34d26c25c2e3196d3bae7ee9340c8a336a7057934dc1181e"
+        },
+        {
+          "path": "study5/threat-audit-v1/family_forgetting.csv",
+          "sha256": "badca7e26fbae2aca7f0277025662c44c3b4244da1621cc3ef9b103772d48e2a"
+        },
+        {
+          "path": "study5/threat-audit-v1/study1_supported_transfer.csv",
+          "sha256": "b663c4368a31d052af7af1f06ca9a5653a050264704da2609e8c1e74928520bc"
+        },
+        {
+          "path": "study5/threat-audit-v1/study5_contract.json",
+          "sha256": "34ec6e24f73acd3aeb241a8bd3d590ce3b8a8c388dd508de543a9ec6b8e996db"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 7",
+      "display_id": "F9",
+      "display_type": "figure",
+      "frozen_takeaway": "Positive prior U-T-C-B replay competence effects did not generalise prospectively across deployment orders.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f9",
+      "output_files": [
+        {
+          "bytes": 29763,
+          "path": "svg/F09_order_replay_effects.svg",
+          "sha256": "c93d0d9fc3511fca5d73afc54a9a3f09788636790c30c9c358b1b7452e5488ba"
+        },
+        {
+          "bytes": 22023,
+          "path": "pdf/F09_order_replay_effects.pdf",
+          "sha256": "10407c581e49b544f9cee91e380702d77add8222a9323e11b8c22cf66e0e9246"
+        },
+        {
+          "bytes": 137410,
+          "path": "png/F09_order_replay_effects.png",
+          "sha256": "0864838b0b0a6be5132c19ff403de4c7739a552e39ea966819314fb2d8c6cfd3"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study5/task009-study5b-all-order-replay-v1/order_summary.csv",
+          "sha256": "b137a881a7a29ff5f74bdd239cea5d39d55c7ff6dce4ca6d6b89c3007b23c021"
+        },
+        {
+          "path": "study5/task009-study5b-all-order-replay-v1/method_dimension_summary.csv",
+          "sha256": "696d87d358a86a08f2a8376b21d1ef3638fe06995716c537389df5910fb7398b"
+        },
+        {
+          "path": "study5/task009-study5b-all-order-replay-v1/all_order_synthesis_verdict.json",
+          "sha256": "3f50a28f3765a585bc9e24626675a81c783f70860ff56fbf5285dda50332a436"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 8",
+      "display_id": "F10",
+      "display_type": "figure",
+      "frozen_takeaway": "Operational harm was easier to recognise than repair under the frozen B100/D1 and A0-A4 regime.",
+      "generator": "danids.evaluation.thesis_assets:_figure_f10",
+      "output_files": [
+        {
+          "bytes": 7010,
+          "path": "svg/F10_evidence_synthesis.svg",
+          "sha256": "123e790cf5a34d421ef726b324fb72fc0fbae6b9b9cc9935c3a91e43960f3d83"
+        },
+        {
+          "bytes": 15375,
+          "path": "pdf/F10_evidence_synthesis.pdf",
+          "sha256": "af1110d7354030a938e8fd2dd9b6cf8e4c916a124c544d2a06d9b46b8c4b4ec3"
+        },
+        {
+          "bytes": 182663,
+          "path": "png/F10_evidence_synthesis.png",
+          "sha256": "416f3e6b0c00217f69bb64e56f75f12f1436b27d544d2a1b1acfb118d10b5719"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+        },
+        {
+          "path": "docs/thesis_master_plan.md",
+          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 1",
+      "display_id": "T1",
+      "display_type": "table",
+      "frozen_takeaway": "The research questions, studies and frozen hypothesis ledger are traceable without reinterpretation.",
+      "generator": "danids.evaluation.thesis_assets:_table_t1",
+      "output_files": [
+        {
+          "bytes": 1176,
+          "path": "tables/T01_rq_hypothesis_map.csv",
+          "sha256": "d7657aef779705d347adb0a5411dcd61d33fc2d87cd4bca053c579a25fdb68da"
+        },
+        {
+          "bytes": 1308,
+          "path": "tables/T01_rq_hypothesis_map.md",
+          "sha256": "23af3d3c9aed97b3a1cc36cb735404d606e8f6c762008558e3580c0f6a92b73a"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+        },
+        {
+          "path": "docs/thesis_master_plan.md",
+          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 2",
+      "display_id": "T2",
+      "display_type": "table",
+      "frozen_takeaway": "Literature claims remain explicitly gated on verified citations.",
+      "generator": "danids.evaluation.thesis_assets:_table_t2",
+      "output_files": [
+        {
+          "bytes": 812,
+          "path": "tables/T02_literature_positioning.csv",
+          "sha256": "7a68d1935a4fc1e2c6d7717aed8ef52b770ac3150e558efa841ff35b50b561b0"
+        },
+        {
+          "bytes": 952,
+          "path": "tables/T02_literature_positioning.md",
+          "sha256": "42482349f73452b72c1a059a002c0d656e6cb2e7c0efdb24f71d29c5bac26d61"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "docs/thesis_master_plan.md",
+          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 3",
+      "display_id": "T3",
+      "display_type": "table",
+      "frozen_takeaway": "Each study has an explicit unit, evidence phase, supervision contract and hypothesis role.",
+      "generator": "danids.evaluation.thesis_assets:_table_t3",
+      "output_files": [
+        {
+          "bytes": 1327,
+          "path": "tables/T03_study_design_crosswalk.csv",
+          "sha256": "49de5cc0b2c5ae54d8e487ccf16acf22a8904edfb33fc9489ff8c725a3d6f3d2"
+        },
+        {
+          "bytes": 1541,
+          "path": "tables/T03_study_design_crosswalk.md",
+          "sha256": "a6fbdad22c2ff957d2e6153f6ab91d701651471a60da1325b35bcad155d471c0"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study1/static-s42-s44/study1_summary.json",
+          "sha256": "179d9b8cd07f0d50de9ee6069a0627cc708c2cbc01c384c3fe2b13917b6cc80b"
+        },
+        {
+          "path": "study2/u-t-c-b-s42-s44/study2_summary.json",
+          "sha256": "c887b28b3724e43fdb397c5050fae579a910151620f4eb690035dc5e1c62e117"
+        },
+        {
+          "path": "study3/health-s42-s44/study3_summary.json",
+          "sha256": "975bcb6fded4a67d0bb350184494db58b2652e04e1a3844cdc16d2b6e8f93c1c"
+        },
+        {
+          "path": "study4/e4-confirmatory-final/study4_summary.json",
+          "sha256": "6c45c09bbed16baf7fb2386330442e5bb29f37edf0f3e8ef70710599bd4c2987"
+        },
+        {
+          "path": "study5/threat-audit-v1/study5_summary.json",
+          "sha256": "b3011816daa6b50d5e39031d937922039ad535e1cf092f8d2d447f590f6636c2"
+        },
+        {
+          "path": "study5/task009-study5b-all-order-replay-v1/study5b_summary.json",
+          "sha256": "eaac990704729c98449ca522e6eedab0a01313a8e548895267d52223687b3b17"
+        }
+      ]
+    },
+    {
+      "chapter": "Chapter 6",
+      "display_id": "T4",
+      "display_type": "table",
+      "frozen_takeaway": "DANIDS-Policy failed closed before model fitting because calibration success support could not meet the frozen rule.",
+      "generator": "danids.evaluation.thesis_assets:_table_t4",
+      "output_files": [
+        {
+          "bytes": 541,
+          "path": "tables/T04_policy_qualification.csv",
+          "sha256": "109a474997c8817dff4c6f354e8a5217dbb79802b94e7b5d2e67747ba5c340d4"
+        },
+        {
+          "bytes": 627,
+          "path": "tables/T04_policy_qualification.md",
+          "sha256": "aa57cfcf8b20ec7a93f32e9e72cd644490d211c2411c7f38d292358e5f778589"
+        }
+      ],
+      "source_artifacts": [
+        {
+          "path": "study4/policy-qualification-v1/policy_qualification.json",
+          "sha256": "f8430dee78409c4c2276d10dc0fd8b812b76a2fef6ff06f0ff0e6b41f5e20698"
+        }
+      ]
+    }
+  ],
+  "figure_count": 10,
+  "generation_command": "python -m danids generate-thesis-assets",
+  "projection_checks": {
+    "F3": {
+      "canonical_values_sha256": "ba4fd8dff5ebbb331746e5b9a1f3946b229f74cfe82a81de7481d1e8064a9694",
+      "cell_rows": 32
+    },
+    "F4": {
+      "final_holdout_rows": 60,
+      "pr_auc_forgetting_rows": 48
+    },
+    "F5": {
+      "correlation_rows": 64,
+      "harmful_auprc_grouped_rows": 8,
+      "state_window_count": 10458
+    },
+    "F7": {
+      "ALWAYS_ADAPT": {
+        "accepted_updates": 70,
+        "compliance_rate": 0.1684286898839138,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 8023
+      },
+      "DANIDS_CORE": {
+        "accepted_updates": 49,
+        "compliance_rate": 0.1407545605306799,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 8290
+      },
+      "OFFLINE_ORACLE": {
+        "accepted_updates": 11,
+        "compliance_rate": 0.1906094527363184,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 7809
+      },
+      "STATIC": {
+        "accepted_updates": 0,
+        "compliance_rate": 0.1696724709784411,
+        "labels_requested": 0,
+        "unsafe_exposure_windows": 8011
+      }
+    },
+    "F8": {
+      "family_forgetting_rows": 1380,
+      "hidden_artifact_rows": 27
+    },
+    "F9": {
+      "all_order_verdict": "NOT_SUPPORTED",
+      "plotted_order_rows": 16
+    }
+  },
+  "scientific_processing": "frozen-artifact-only; no experiments, training, rescoring, or hypothesis recomputation",
+  "supplementary_files": [
+    {
+      "bytes": 7438,
+      "path": "captions.md",
+      "sha256": "802ef0fae915cc27350aaafdafa1bc657720bbb59e11cc9336fef324fcf24f91"
+    }
+  ],
+  "table_count": 4
+}
