@@ -1,0 +1,13 @@
+| Qualification field | Frozen value |
+| --- | --- |
+| Calibration physical components | 103 |
+| Minimum recommendations | 100 |
+| Minimum model-changing selections | 25 |
+| Required Wilson 95% lower bound | 0.9 |
+| Minimum successes at n=100 | 96 |
+| Maximum confirmed successes | 10 |
+| Maximum empirical success rate at n=100 | 0.1 |
+| Maximum Wilson 95% lower bound | 0.055229137060675094 |
+| Action models fitted | False |
+| Policy status | DISABLED_INSUFFICIENT_CALIBRATION_SUCCESS_SUPPORT |
+| Fail-closed reason | the oracle can confirm at most 10/100 successes; at least 96/100 are required by the frozen Wilson rule |

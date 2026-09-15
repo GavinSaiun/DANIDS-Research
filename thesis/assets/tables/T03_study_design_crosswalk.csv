@@ -1,0 +1,7 @@
+Study,Question / estimand,Methods,Domains / orders,Seeds,Experimental unit,Supervision,Information boundary,Evidence phase,Hypothesis
+Study 1,Static cross-domain transfer,Static,4 sources × 4 targets,42–44,source × target × seed,None,Evaluator-only outcomes,Prior benchmark,H1
+Study 2,Sequential adaptation and retention,Static; NaiveFT; EWC; ER; FT-Mem,U-T-C-B,42–44,sequence × seed,B100/D1,Released labels only,Prior sequential evidence,Supports RQ1 context
+Study 3,Same-window model-health estimation,Logistic; gradient boosting,4 rotations,42–44,held-out current domain,Frozen delayed-label signals,Policy-visible features separated from evaluator truth,Prospective confirmatory extraction,H2; H3; H9
+Study 4,Selective intervention and recoverability,Static; Always-Adapt; Core; Offline Oracle,4 rotations,42–44,rotation × seed,B100/D1,Core sees health/released evidence; Oracle is evaluator-visible,Frozen confirmatory,H4; H10
+Study 5A,Family-conditioned binary detection audit,Artifact-only,"Studies 1, 2 and 4",Inherited,physically supported family slice,No new supervision,Evaluator-only audit,Prior artifact-only audit,H6; H8
+Study 5B,All-order replay-retention robustness,NaiveFT; ER; FT-Mem,4 rotations,42–44,rotation × seed,B100/D1,No policy controller,9 prior U-T-C-B runs + 27 prospective runs,H7
