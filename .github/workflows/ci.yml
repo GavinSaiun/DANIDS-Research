@@ -36,7 +36,17 @@ jobs:
         run: ruff format --check .
 
       - name: Type-check
-        run: mypy src
+        shell: bash
+        run: |
+          set +e
+          mypy src 2>&1 | tee "${RUNNER_TEMP}/mypy-output.txt"
+          status=${PIPESTATUS[0]}
+          if (( status != 0 )); then
+            while IFS= read -r line; do
+              printf '::error title=mypy::%s\n' "$line"
+            done < "${RUNNER_TEMP}/mypy-output.txt"
+          fi
+          exit "$status"
 
       - name: Run dataset-free test suite
         run: pytest
