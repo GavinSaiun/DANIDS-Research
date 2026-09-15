@@ -28,6 +28,7 @@ from danids.evaluation.thesis_assets import (
     _output_record,
     _projection_checks,
     _table_t1,
+    _table_t2,
     _table_t4,
     verify_thesis_assets,
 )
@@ -63,10 +64,12 @@ def test_thesis_display_contract_is_exact_and_uses_frozen_sources() -> None:
     assert SOURCE_PATHS["policy_qualification"] == (
         "study4/policy-qualification-v1-final/policy_qualification.json"
     )
+    assert SOURCE_PATHS["literature_t02"] == "docs/literature_t02_evidence.md"
     assert all("runs/" not in path for path in SOURCE_PATHS.values())
 
 
 def test_display_provenance_meets_the_frozen_minimum() -> None:
+    assert DISPLAY_SPECS["T2"].sources == ("literature_t02", "freeze", "plan")
     assert DISPLAY_SPECS["F2"].sources == (
         "freeze",
         "decisions",
@@ -186,6 +189,57 @@ def test_t01_exactly_maps_the_five_reader_facing_research_questions() -> None:
         },
     ]
     assert not table["Study evidence"].astype(str).str.fullmatch("Synthesis").any()
+
+
+def test_t02_is_a_complete_deterministic_literature_contract() -> None:
+    table = _table_t2()
+    substantive_columns = [
+        "Prediction target",
+        "Information available",
+        "Typical unit",
+        "Operational criterion",
+        "Unresolved DANIDS layer",
+    ]
+    assert table.columns.tolist() == [
+        "Area",
+        *substantive_columns,
+        "Citation status",
+    ]
+    assert table["Area"].tolist() == [
+        "Cross-domain NIDS",
+        "Continual learning",
+        "Drift monitoring",
+        "Selective adaptation",
+        "Family/open-set evaluation",
+    ]
+
+    substantive = table.loc[:, substantive_columns]
+    assert substantive.size == 25
+    assert not substantive.isna().to_numpy().any()
+    assert all(str(value).strip() for value in substantive.to_numpy().ravel())
+    complete_text = "\n".join(table.astype(str).to_numpy().ravel().tolist())
+    assert "CITATION_REQUIRED" not in complete_text
+    assert "Pending verified literature" not in complete_text
+
+    assert table["Citation status"].tolist() == [
+        "Apruzzese et al. (2022); Layeghy & Portmann (2023); Layeghy et al. (2023)",
+        "Parisi et al. (2019); Kirkpatrick et al. (2017); Lopez-Paz & Ranzato (2017); Delgado et al. (2026)",
+        "Lu et al. (2019); Gama et al. (2004); Gretton et al. (2012); Rabanser et al. (2019)",
+        "Horchulhack et al. (2022); Niu et al. (2022, 2023); Yoo et al. (2024)",
+        "Elmasry et al. (2019); Cruz et al. (2017); Baye et al. (2023); Yu et al. (2024)",
+    ]
+    assert table["Unresolved DANIDS layer"].tolist() == [
+        "Separating detected shift, fixed-threshold operational harm and sequential recoverability",
+        "Label-free harm recognition and audited minimum intervention under hidden boundaries and delayed labels",
+        "Whether same-window change is operationally harmful and safely repairable",
+        "Health-conditioned A0-A4 choice under B100/D1 with audit-gated promotion or rollback",
+        "DANIDS provides family-conditioned binary detection recall only, with no attribution or open-set output",
+    ]
+    assert "without claiming that the cited areas ignore deployment shift" in CAPTIONS["T2"]
+    t02_guardrail = thesis_assets.INTERPRETATION_NOTES["T2"]
+    assert "not a novelty census" in t02_guardrail
+    assert "same-window harm screening" in t02_guardrail
+    assert "bounded to the frozen B100/D1 and A0-A4 regime" in t02_guardrail
 
 
 def test_t03_records_prospective_freezes_and_mixed_evidence_timing() -> None:

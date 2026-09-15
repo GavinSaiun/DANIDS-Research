@@ -94,11 +94,11 @@ Interpretation guardrail: H3 is NOT_SUPPORTED; H9 and H10 use the compact final 
 
 ## T2 — T02_literature_positioning
 
-Literature-positioning framework. CITATION_REQUIRED cells are deliberate placeholders: no unverified reference or literature claim is introduced by this artifact-only generator.
+Verified literature-positioning matrix. Representative adjacent work is compared by prediction target, information regime, evaluation unit and success criterion. The final column states the remaining interface question for DANIDS without claiming that the cited areas ignore deployment shift.
 
-Sources: `docs/thesis_master_plan.md`.
+Sources: `docs/literature_t02_evidence.md`, `docs/thesis_evidence_freeze.md`, `docs/thesis_master_plan.md`.
 
-Interpretation guardrail: Replace placeholders only after external literature citations are independently verified.
+Interpretation guardrail: Read the five areas as adjacent capabilities, not a novelty census. DANIDS uses same-window harm screening, and its repair claims remain bounded to the frozen B100/D1 and A0-A4 regime.
 
 ## T3 — T03_study_design_crosswalk
 

@@ -531,23 +531,33 @@
       "chapter": "Chapter 2",
       "display_id": "T2",
       "display_type": "table",
-      "frozen_takeaway": "Literature claims remain explicitly gated on verified citations.",
+      "frozen_takeaway": "Adjacent literature addresses parts of the pipeline, while the interfaces among shift, operational harm and constrained recoverability remain distinct.",
       "generator": "danids.evaluation.thesis_assets:_table_t2",
       "output_files": [
         {
-          "bytes": 812,
+          "bytes": 2904,
           "hash_mode": "canonical-lf-utf8",
           "path": "tables/T02_literature_positioning.csv",
-          "sha256": "7a68d1935a4fc1e2c6d7717aed8ef52b770ac3150e558efa841ff35b50b561b0"
+          "sha256": "8e543710a46e74203bf55df7974f779b8a9f339ebe805f8e8efbee49a0903731"
         },
         {
-          "bytes": 952,
+          "bytes": 3018,
           "hash_mode": "canonical-lf-utf8",
           "path": "tables/T02_literature_positioning.md",
-          "sha256": "42482349f73452b72c1a059a002c0d656e6cb2e7c0efdb24f71d29c5bac26d61"
+          "sha256": "a80e2330d0e400e9feffd7d0e4e297b342b0f2b9965a705bcd1c9e338cba88eb"
         }
       ],
       "source_artifacts": [
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "docs/literature_t02_evidence.md",
+          "sha256": "444becbf84b307f966f5cbc5037c755490b52ec9ec3c8f662536f1eab7abc346"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
+        },
         {
           "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_master_plan.md",
@@ -711,10 +721,10 @@
   "scientific_processing": "frozen-artifact-only; no experiments, training, rescoring, or hypothesis recomputation",
   "supplementary_files": [
     {
-      "bytes": 8469,
+      "bytes": 8748,
       "hash_mode": "canonical-lf-utf8",
       "path": "captions.md",
-      "sha256": "478876dc21805a0621d5ee9bfe666025b76aeb810491ac57954960dfd2c97e06"
+      "sha256": "b9a5b9a596873ea4b77ff20d8e4ea2113ef75ff7304b2c771d25b79699e0e53a"
     }
   ],
   "table_count": 4

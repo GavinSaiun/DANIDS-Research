@@ -77,6 +77,7 @@ SOURCE_PATHS = {
     "freeze": "docs/thesis_evidence_freeze.md",
     "plan": "docs/thesis_master_plan.md",
     "decisions": "docs/decisions.md",
+    "literature_t02": "docs/literature_t02_evidence.md",
     "study1_seed": "study1/static-s42-s44/study1_seed_summary.csv",
     "study1_transfer": "study1/static-s42-s44/study1_transfer_long.csv",
     "study1_summary": "study1/static-s42-s44/study1_summary.json",
@@ -130,8 +131,8 @@ DISPLAY_SPECS = {
     ),
     "T2": DisplaySpec(
         "Chapter 2",
-        ("plan",),
-        "Literature claims remain explicitly gated on verified citations.",
+        ("literature_t02", "freeze", "plan"),
+        "Adjacent literature addresses parts of the pipeline, while the interfaces among shift, operational harm and constrained recoverability remain distinct.",
     ),
     "F2": DisplaySpec(
         "Chapter 3",
@@ -1321,25 +1322,53 @@ def _table_t1() -> pd.DataFrame:
 
 
 def _table_t2() -> pd.DataFrame:
-    rows = []
-    for area in (
-        "Cross-domain NIDS",
-        "Continual learning",
-        "Drift monitoring",
-        "Selective adaptation",
-        "Family/open-set evaluation",
-    ):
-        rows.append(
-            (
-                area,
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "Pending verified literature",
-            )
-        )
+    rows = [
+        (
+            "Cross-domain NIDS",
+            "Per-flow binary attack detection or attack-specific classification after a network or dataset change",
+            "Labeled source data; target or cross-network use ranges from held-out testing to unlabeled adaptation or labeled augmentation",
+            "Directional source-to-target corpus pair under a common flow-feature schema",
+            "Target F1 or related classification performance and degradation from a same-domain reference",
+            "Separating detected shift, fixed-threshold operational harm and sequential recoverability",
+            "Apruzzese et al. (2022); Layeghy & Portmann (2023); Layeghy et al. (2023)",
+        ),
+        (
+            "Continual learning",
+            "Current-task prediction while retaining earlier-task or domain competence in one evolving model",
+            "Sequential labels; optional stored exemplars, task identity or parameter-importance state",
+            "Task or domain stage by retained test set, summarized over a sequence",
+            "High current and final performance with low forgetting or favourable backward transfer",
+            "Label-free harm recognition and audited minimum intervention under hidden boundaries and delayed labels",
+            "Parisi et al. (2019); Kirkpatrick et al. (2017); Lopez-Paz & Ranzato (2017); Delgado et al. (2026)",
+        ),
+        (
+            "Drift monitoring",
+            "Distribution mismatch or change point, or rising labeled prediction error",
+            "Reference data or model plus current unlabeled features or scores; labels for direct error monitoring",
+            "Current sample or window versus a reference window, or a sequential error stream",
+            "Controlled shift or error alarms with low false alarms and detection delay",
+            "Whether same-window change is operationally harmful and safely repairable",
+            "Lu et al. (2019); Gama et al. (2004); Gretton et al. (2012); Rabanser et al. (2019)",
+        ),
+        (
+            "Selective adaptation",
+            "Whether, when and on which samples or batches a deployed model should adapt",
+            "Current unlabeled inputs, predictions, entropy or shift proxies; sometimes delayed performance feedback",
+            "Test sample or minibatch, stream step or detected-drift episode",
+            "Shifted-domain accuracy plus update cost, forgetting, stability or collapse avoidance",
+            "Health-conditioned A0-A4 choice under B100/D1 with audit-gated promotion or rollback",
+            "Horchulhack et al. (2022); Niu et al. (2022, 2023); Yoo et al. (2024)",
+        ),
+        (
+            "Family/open-set evaluation",
+            "Known-class attribution or explicit UNKNOWN rejection, distinct from binary detection sliced by true family",
+            "Flow features; held-out classes for open-set tests; evaluator-only true families for conditional recall",
+            "Flow or connection summarized per class or family within a physical evaluation slice",
+            "Per-class or macro metrics and known-versus-unknown rejection trade-offs, reported separately",
+            "DANIDS provides family-conditioned binary detection recall only, with no attribution or open-set output",
+            "Elmasry et al. (2019); Cruz et al. (2017); Baye et al. (2023); Yu et al. (2024)",
+        ),
+    ]
     return pd.DataFrame(
         rows,
         columns=[
@@ -1477,7 +1506,8 @@ CAPTIONS = {
     ),
     "T1": "Research-question and hypothesis map. Hypothesis statuses reproduce the frozen ledger verbatim and are not re-estimated here.",
     "T2": (
-        "Literature-positioning framework. CITATION_REQUIRED cells are deliberate placeholders: no unverified reference or literature claim is introduced by this artifact-only generator."
+        "Verified literature-positioning matrix. Representative adjacent work is compared by prediction target, information regime, evaluation unit and success criterion. "
+        "The final column states the remaining interface question for DANIDS without claiming that the cited areas ignore deployment shift."
     ),
     "F2": (
         "Frozen prequential chronology and information boundary. Prediction and label-free health extraction precede truth observation; labels release one window later. "
@@ -1528,7 +1558,10 @@ CAPTIONS = {
 INTERPRETATION_NOTES = {
     "F1": "Do not collapse recognition, intervention and outcome into a single capability claim.",
     "T1": "H3 is NOT_SUPPORTED; H9 and H10 use the compact final status PARTIAL.",
-    "T2": "Replace placeholders only after external literature citations are independently verified.",
+    "T2": (
+        "Read the five areas as adjacent capabilities, not a novelty census. DANIDS uses same-window harm screening, "
+        "and its repair claims remain bounded to the frozen B100/D1 and A0-A4 regime."
+    ),
     "F2": "Evaluator-only truth is used for scoring, never deployed control.",
     "T3": "Units are study-level experimental units, not flows, windows or family rows treated as replicates.",
     "F3": "Do not infer symmetric transfer from a source-target pair.",
