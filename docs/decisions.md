@@ -747,6 +747,47 @@ prior and prospectively collected evidence and records
 **Affected experiments:** TASK-009 / Study-5B only. TASK-007, TASK-008, the existing
 U-T-C-B runs, and the Study-2 training implementation remain unchanged.
 
+## D052 — Thesis experiment and evidence freeze after Study 5B
+
+**Date:** 2026-09-15
+
+**Old rule:** Study 6 reserved external CICIoT2023 validation after the core methodology
+was frozen, subject to a defensible feature contract. The completed Studies 1--5 had not
+yet been consolidated into one final hypothesis ledger and thesis-level stopping
+decision.
+
+**New rule:**
+
+```text
+experiment program frozen after Study 5B
+Study 6 NO-GO
+```
+
+External validation remains valuable future work, but it would introduce
+disproportionate engineering and comparability risk with approximately four weeks
+remaining. No new experiment is added to the frozen evidence.
+No existing result bundle is tuned, regenerated, or scientifically altered by this
+freeze.
+
+The final hypothesis ledger is H1 `SUPPORTED`, H2 `SUPPORTED`, H3 `NOT_SUPPORTED`, H4
+`NOT_SUPPORTED`, H6 `NOT_TESTABLE`, H7 `NOT_SUPPORTED`, H8 `NOT_TESTABLE`, H9 `PARTIAL`,
+and H10 `PARTIAL`. H3 `NOT_SUPPORTED` supersedes earlier informal `PARTIAL` wording.
+The central thesis statement, evidence timing, claim guardrails, limitations, future
+work, and exact supporting artifact locations are frozen in
+`docs/thesis_evidence_freeze.md`.
+
+**Reason:** Studies 1--5 already support the thesis-level contribution that deployment
+shift, operational harm, and safe recoverability are distinct problems. Stopping now
+protects comparability and prevents a late external dataset integration from weakening
+the completed, leakage-safe evidence program.
+
+**Status:** Final result-informed evidence freeze and administrative stopping decision;
+this is not a new confirmatory experiment.
+
+**Affected experiments:** The completed Study 1--5 artifacts and scientific results are
+unchanged. CICIoT2023 validation, budget/delay sensitivity, richer actions, attribution,
+and open-set recognition move outside the current thesis experimental scope.
+
 ---
 
 ## Template for future decisions
