@@ -49,6 +49,7 @@ from danids.evaluation.study5b import (
     _load_task009_contract,
     _normalise_trajectory,
     _ontology_semantic_supports,
+    _project_trajectory_row,
     _source_artifacts_record,
     _task009_contract_record,
     _tree_digests,
@@ -215,6 +216,124 @@ def _complete_trajectory() -> list[dict[str, object]]:
                                     )
                                 )
     return _normalise_trajectory(rows, ONTOLOGY)
+
+
+def test_project_trajectory_row_canonicalises_optional_text() -> None:
+    sequence = EXTENSION_ROTATIONS[0]
+    source_native, source_family = LABELS[sequence[0]][0]
+    source_retention = _trajectory_cell(
+        sequence=sequence,
+        seed=42,
+        method="naive_ft",
+        domain=sequence[0],
+        native_label=source_native,
+        semantic_family=source_family,
+        lifecycle="pre_adapt",
+        stage=2,
+        event_index=2,
+        tp=50,
+        level="NATIVE",
+    )
+    source_retention["learned_state_status"] = None
+    projected_retention = _project_trajectory_row(source_retention, family_level="NATIVE")
+    assert projected_retention["learned_state_status"] == ""
+    assert projected_retention["semantic_family"] == source_family
+
+    earlier_domain_post_adapt = {
+        **source_retention,
+        "lifecycle_event": "post_adapt",
+        "event_index": 3,
+    }
+    projected_earlier = _project_trajectory_row(earlier_domain_post_adapt, family_level="NATIVE")
+    assert projected_earlier["learned_state_status"] == ""
+
+    learned_native, learned_family = LABELS[sequence[1]][0]
+    learned = _trajectory_cell(
+        sequence=sequence,
+        seed=42,
+        method="naive_ft",
+        domain=sequence[1],
+        native_label=learned_native,
+        semantic_family=learned_family,
+        lifecycle="post_adapt",
+        stage=2,
+        event_index=3,
+        tp=50,
+        level="NATIVE",
+    )
+    projected_learned = _project_trajectory_row(learned, family_level="NATIVE")
+    assert projected_learned["learned_state_status"] == "LEARNED_REFERENCE"
+    assert projected_learned["semantic_family"] == learned_family
+
+    unmapped = _trajectory_cell(
+        sequence=("B", "U", "T", "C"),
+        seed=42,
+        method="naive_ft",
+        domain="U",
+        native_label="Analysis",
+        semantic_family="",
+        lifecycle="pre_adapt",
+        stage=2,
+        event_index=2,
+        tp=40,
+        level="NATIVE",
+    )
+    unmapped["mapping_status"] = MappingStatus.UNMAPPED.value
+    unmapped["semantic_family"] = None
+    unmapped["learned_state_status"] = None
+    projected_unmapped = _project_trajectory_row(unmapped, family_level="NATIVE")
+    assert projected_unmapped["mapping_status"] == MappingStatus.UNMAPPED.value
+    assert projected_unmapped["semantic_family"] == ""
+    assert projected_unmapped["family_identity"] == "U::Analysis"
+
+
+def test_mixed_prior_blank_and_prospective_none_trajectory_validates() -> None:
+    canonical = _complete_trajectory()
+    projected: list[dict[str, object]] = []
+    for original in canonical:
+        row = dict(original)
+        if row["evidence_layer"] == PROSPECTIVE_EVIDENCE and row["learned_state_status"] == "":
+            row["learned_state_status"] = None
+        projected.append(_project_trajectory_row(row, family_level=str(row["family_level"])))
+
+    normalised = _normalise_trajectory(projected, ONTOLOGY)
+    assert len(normalised) == len(canonical)
+    assert any(
+        row["evidence_layer"] == EXISTING_EVIDENCE and row["learned_state_status"] == ""
+        for row in normalised
+    )
+    assert any(
+        row["evidence_layer"] == PROSPECTIVE_EVIDENCE
+        and row["domain_position"] == 1
+        and row["lifecycle_event"] == "pre_adapt"
+        and row["stage"] == 2
+        and row["learned_state_status"] == ""
+        for row in normalised
+    )
+    assert any(
+        row["evidence_layer"] == PROSPECTIVE_EVIDENCE
+        and row["domain_position"] == 1
+        and row["lifecycle_event"] == "post_adapt"
+        and row["stage"] == 2
+        and row["learned_state_status"] == ""
+        for row in normalised
+    )
+    assert all(
+        (row["learned_state_status"] == "LEARNED_REFERENCE")
+        == (
+            (row["lifecycle_event"] == "source_initial" and row["domain_position"] == 1)
+            or (row["lifecycle_event"] == "post_adapt" and row["stage"] == row["domain_position"])
+        )
+        for row in normalised
+    )
+
+
+def test_malformed_nonempty_learned_marker_is_rejected() -> None:
+    rows = copy.deepcopy(_complete_trajectory())
+    target = next(row for row in rows if row["learned_state_status"] == "")
+    target["learned_state_status"] = "None"
+    with pytest.raises(ValueError, match="learned-state marker differs"):
+        _normalise_trajectory(rows, ONTOLOGY)
 
 
 def _fake_source_identity(sequence: tuple[str, ...], seed: int) -> list[str]:
