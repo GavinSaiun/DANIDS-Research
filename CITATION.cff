@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software or its frozen research artifacts, please cite it using this metadata."
+title: "DANIDS: Deployment-Aware Network Intrusion Detection under Sequential Cross-Domain Shift"
+type: software
+version: 2.0.0
+authors:
+  - family-names: "Sun"
+    given-names: "Gavin"
+repository-code: "https://github.com/GavinSaiun/DANIDS-Research"

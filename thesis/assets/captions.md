@@ -2,7 +2,7 @@
 
 Generated deterministically from frozen Study 1–5 artifacts. No experiment, rescoring, or new scientific analysis is performed.
 
-Domain labels: U = UNSW-NB15; T = ToN-IoT; C = CICIDS2017; B = BoT-IoT.
+Domain labels: U = NF-UNSW-NB15-v3; T = NF-ToN-IoT-v3; C = NF-CSE-CIC-IDS2018-v3; B = NF-BoT-IoT-v3.
 
 ## F1 — F01_danids_pipeline
 
@@ -16,7 +16,7 @@ Interpretation guardrail: Do not collapse recognition, intervention and outcome 
 
 Frozen prequential chronology and information boundary. Prediction and label-free health extraction precede truth observation; labels release one window later. Permanent holdouts and evaluator truth cannot enter Core, querying, training, calibration, replay, or audit.
 
-Sources: `docs/thesis_evidence_freeze.md`, `docs/decisions.md`.
+Sources: `docs/thesis_evidence_freeze.md`, `docs/decisions.md`, `study3/health-s42-s44/evaluation_contract.json`, `study4/e4-confirmatory-final/evaluation_contract.json`, `study5/threat-audit-v1/study5_contract.json`, `study5/task009-study5b-all-order-replay-v1/task009_contract.json`.
 
 Interpretation guardrail: Evaluator-only truth is used for scoring, never deployed control.
 
@@ -48,7 +48,7 @@ Interpretation guardrail: Use the phrase same-window harm screening; avoid langu
 
 DANIDS-Core action lifecycle. Candidate changes are audited before promotion and rejected candidates restore exact deployed state. A3 is unavailable to normal Core; Offline Oracle is a separate non-deployable comparator with evaluator visibility.
 
-Sources: `docs/thesis_evidence_freeze.md`, `docs/decisions.md`.
+Sources: `docs/thesis_evidence_freeze.md`, `docs/decisions.md`, `study4/e4-confirmatory-final/evaluation_contract.json`.
 
 Interpretation guardrail: Do not imply that DANIDS-Policy was deployed; it failed qualification before fitting.
 
@@ -80,7 +80,7 @@ Interpretation guardrail: Do not call the four-order H7 synthesis wholly prospec
 
 Frozen evidence synthesis. Across the four related NetFlow-v3 domains, operational harm was easier to recognise than repair under the frozen B100/D1 and A0-A4 regime. This bounded result is neither causal proof nor a claim that safe adaptation is impossible in general.
 
-Sources: `docs/thesis_evidence_freeze.md`, `docs/thesis_master_plan.md`.
+Sources: `docs/thesis_evidence_freeze.md`, `study1/static-s42-s44/study1_summary.json`, `study2/u-t-c-b-s42-s44/study2_summary.json`, `study3/health-s42-s44/study3_summary.json`, `study4/e4-confirmatory-analysis/study4_confirmatory_results.json`, `study5/threat-audit-v1/study5_summary.json`, `study5/task009-study5b-all-order-replay-v1/all_order_synthesis_verdict.json`.
 
 Interpretation guardrail: Do not generalise beyond the frozen evidence boundary or claim safe adaptation is impossible.
 
@@ -102,9 +102,9 @@ Interpretation guardrail: Replace placeholders only after external literature ci
 
 ## T3 — T03_study_design_crosswalk
 
-Study-design crosswalk. Study 5B explicitly combines nine prior U-T-C-B runs with 27 prospectively frozen missing-rotation runs.
+Study-design crosswalk. Study 5A froze its ontology and estimands after Studies 1--4 existed but before artifact-only threat-effect analysis over the prior Study 1, 2, and 4 source bundles. Study 5B combines nine prior U-T-C-B runs with 27 prospective missing-rotation runs in a mixed prior/prospective four-order synthesis.
 
-Sources: `study1/static-s42-s44/study1_summary.json`, `study2/u-t-c-b-s42-s44/study2_summary.json`, `study3/health-s42-s44/study3_summary.json`, `study4/e4-confirmatory-final/study4_summary.json`, `study5/threat-audit-v1/study5_summary.json`, `study5/task009-study5b-all-order-replay-v1/study5b_summary.json`.
+Sources: `study1/static-s42-s44/study1_summary.json`, `study2/u-t-c-b-s42-s44/study2_summary.json`, `study3/health-s42-s44/study3_summary.json`, `study3/health-s42-s44/evaluation_contract.json`, `study4/e4-confirmatory-final/study4_summary.json`, `study4/e4-confirmatory-final/evaluation_contract.json`, `study5/threat-audit-v1/study5_summary.json`, `study5/threat-audit-v1/study5_contract.json`, `study5/task009-study5b-all-order-replay-v1/study5b_summary.json`, `study5/task009-study5b-all-order-replay-v1/task009_contract.json`.
 
 Interpretation guardrail: Units are study-level experimental units, not flows, windows or family rows treated as replicates.
 
@@ -112,6 +112,6 @@ Interpretation guardrail: Units are study-level experimental units, not flows, w
 
 DANIDS-Policy qualification. The model-independent upper bound could not meet the frozen Wilson criterion, so Policy was disabled before action-model fitting.
 
-Sources: `study4/policy-qualification-v1/policy_qualification.json`.
+Sources: `study4/policy-qualification-v1-final/policy_qualification.json`.
 
 Interpretation guardrail: The failure is a frozen support qualification result, not post-hoc threshold tuning.

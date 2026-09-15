@@ -1,8 +1,10 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,21 +15,27 @@ from danids.evaluation import thesis_assets
 from danids.evaluation.thesis_assets import (
     ASSET_VERSION,
     CAPTIONS,
+    DIGEST_POLICY,
     DISPLAY_SPECS,
     FIGURE_STEMS,
+    GENERATION_COMMAND,
+    SCIENTIFIC_PROCESSING,
     SOURCE_PATHS,
     TABLE_STEMS,
+    _captions_markdown,
     _figure_f1,
+    _hash_mode,
     _output_record,
     _projection_checks,
     _table_t1,
     _table_t4,
     verify_thesis_assets,
 )
-from danids.evaluation.thesis_style import export_figure, thesis_style
+from danids.evaluation.thesis_assets import _sha256 as _canonical_sha256
+from danids.evaluation.thesis_style import DOMAIN_LABELS, export_figure, thesis_style
 
 
-def _sha256(path: Path) -> str:
+def _raw_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -52,7 +60,57 @@ def test_thesis_display_contract_is_exact_and_uses_frozen_sources() -> None:
     }
     assert set(DISPLAY_SPECS) == {*FIGURE_STEMS, *TABLE_STEMS}
     assert SOURCE_PATHS["study5b_verdict"].endswith("all_order_synthesis_verdict.json")
+    assert SOURCE_PATHS["policy_qualification"] == (
+        "study4/policy-qualification-v1-final/policy_qualification.json"
+    )
     assert all("runs/" not in path for path in SOURCE_PATHS.values())
+
+
+def test_display_provenance_meets_the_frozen_minimum() -> None:
+    assert DISPLAY_SPECS["F2"].sources == (
+        "freeze",
+        "decisions",
+        "study3_contract",
+        "study4_contract",
+        "study5_contract",
+        "study5b_contract",
+    )
+    assert DISPLAY_SPECS["F6"].sources == ("freeze", "decisions", "study4_contract")
+    assert DISPLAY_SPECS["F10"].sources == (
+        "freeze",
+        "study1_summary",
+        "study2_summary",
+        "study3_summary",
+        "study4_results",
+        "study5_summary",
+        "study5b_verdict",
+    )
+    assert DISPLAY_SPECS["T3"].sources == (
+        "study1_summary",
+        "study2_summary",
+        "study3_summary",
+        "study3_contract",
+        "study4_summary",
+        "study4_contract",
+        "study5_summary",
+        "study5_contract",
+        "study5b_summary",
+        "study5b_contract",
+    )
+    assert DISPLAY_SPECS["T4"].sources == ("policy_qualification",)
+
+
+def test_domain_labels_use_the_exact_frozen_dataset_ids(tmp_path: Path) -> None:
+    assert DOMAIN_LABELS == {
+        "U": "NF-UNSW-NB15-v3",
+        "T": "NF-ToN-IoT-v3",
+        "C": "NF-CSE-CIC-IDS2018-v3",
+        "B": "NF-BoT-IoT-v3",
+    }
+    sources = {key: tmp_path / path for key, path in SOURCE_PATHS.items()}
+    caption_text = _captions_markdown(sources, tmp_path)
+    assert "C = NF-CSE-CIC-IDS2018-v3" in caption_text
+    assert "CICIDS2017" not in caption_text
 
 
 def test_frozen_ledger_and_wording_guardrails_are_preserved() -> None:
@@ -68,6 +126,78 @@ def test_frozen_ledger_and_wording_guardrails_are_preserved() -> None:
     assert "family-conditioned binary detection" in caption_text
     assert "mixed prior/prospective evidence" in caption_text
     assert "safe adaptation is impossible" in caption_text
+
+
+def test_wording_guardrail_allows_only_the_frozen_early_warning_negation() -> None:
+    assert (
+        thesis_assets._wording_guardrail_violations(
+            "This is same-window harm screening, not anticipatory early warning."
+        )
+        == ()
+    )
+    assert thesis_assets._wording_guardrail_violations(
+        "The method provides anticipatory early warning."
+    ) == ("anticipatory early warning",)
+
+
+def test_t01_exactly_maps_the_five_reader_facing_research_questions() -> None:
+    table = _table_t1()
+    rows = table.loc[table["Research question"].str.fullmatch(r"RQ[1-5]")].to_dict("records")
+    assert rows == [
+        {
+            "Research question": "RQ1",
+            "Frozen wording": "How severe and direction-dependent is intrusion-detection degradation across heterogeneous network domains, and what operational trade-offs arise when standard continual-learning methods adapt one evolving detector?",
+            "Study evidence": "Studies 1, 2",
+            "Hypotheses": "H1",
+            "Home chapter": "Chapter 4",
+            "Final answer": "Static cross-domain degradation was substantial and asymmetric across recall, false-positive burden, and ranking performance. Straightforward adaptation did not solve the deployment problem: target-domain recall recovery could coexist with extreme false-positive burden or reduced earlier-domain competence, and threshold-free retention did not guarantee acceptable operation at the frozen threshold. Study 1's sequence positions are reporting positions, not causal order effects.",
+        },
+        {
+            "Research question": "RQ2",
+            "Frozen wording": "Which observable distributional and model-state signals can distinguish harmful operating-envelope violations from harmless domain change, and do combined or sparsely supervised health models generalise reliably?",
+            "Study evidence": "Study 3",
+            "Hypotheses": "H2; H3; H9",
+            "Home chapter": "Chapter 5",
+            "Final answer": "Many harmful windows were recognisable from permitted label-free observables, and the reviewed combined-unlabelled gradient-boosting model was the strongest label-free comparator selected for the frozen Core monitor. Distribution shift was not equivalent to harm, however, and neither combined signals nor sparse delayed labels dominated every simpler comparator across models, metrics, and grouped generalisation protocols. This is strong same-window harm screening, not anticipatory early warning.",
+        },
+        {
+            "Research question": "RQ3",
+            "Frozen wording": "Under the frozen B100/D1 supervision regime and A0--A4 action space, can health-aware selective adaptation maintain or restore operating-envelope safety while reducing supervision, accepted updates, and operational forgetting relative to unconditional adaptation?",
+            "Study evidence": "Study 4",
+            "Hypotheses": "H4; H10",
+            "Home chapter": "Chapter 6",
+            "Final answer": "No. Core reduced accepted update frequency relative to Always-Adapt, but did not reduce requested labels—the frozen label-usage artifact records equal requested-label totals—and did not maintain comparable operational safety. The descriptively favourable operational-forgetting component and fewer accepted updates did not rescue the no-supervision-reduction and failed comparable-safety components of H10. The scheduled Always-Adapt treatment was slightly worse than Static despite using 3,600 labels across its 12 runs, so unconditional adaptation did not restore aggregate safety. The non-deployable one-step Offline Oracle's sparse selected updates supported the minimum-intervention motivation, yet its approximately 19.06% compliance also showed that most observed harm was not recoverable under the frozen B100/D1 and A0--A4 regime. This does not establish that safe adaptation is impossible in general. DANIDS-Policy failed closed before fitting and was never deployed.",
+        },
+        {
+            "Research question": "RQ4",
+            "Frozen wording": "To what extent do aggregate binary metrics conceal family-specific detection failures across deployment histories, and what is the evidential boundary between family-conditioned detection, attack attribution, and open-set recognition?",
+            "Study evidence": "Study 5A",
+            "Hypotheses": "H6; H8",
+            "Home chapter": "Chapter 7",
+            "Final answer": "Aggregate binary recall could remain within the frozen loss tolerance while a physically supported family experienced a larger loss. The estimand is family-conditioned binary detection recall. No attribution predictions, structured embedding comparison, explicit UNKNOWN decision, or open-set experiment was performed, so H6 and H8 are not testable. The 27 hidden-family rows are repeated lifecycle/representation output rows, not 27 independent failures, and history-relative unseen status is not a real-world zero-day claim.",
+        },
+        {
+            "Research question": "RQ5",
+            "Frozen wording": "Does replay-aware adaptation robustly reduce supported attack-family forgetting and improve final previous-domain competence across deployment orders relative to target-only full fine-tuning?",
+            "Study evidence": "Studies 2, 5B",
+            "Hypotheses": "H7",
+            "Home chapter": "Chapter 7",
+            "Final answer": "No order-robust replay advantage was found. Positive U-T-C-B replay competence effects had been observed before TASK-009; the three missing rotations were then frozen prospectively and failed to reproduce the benefit. B-U-T-C showed materially adverse replay effects. The conclusion is deployment-order heterogeneity and reversal, not merely a near-zero pooled effect. The final four-order synthesis mixes prior and prospective evidence. Its primary level is mapped semantic families with physical support n >= 50; only previous domains in positions 1--3 are eligible, while position 4 is excluded. Effects are aggregated unweighted from family to domain to rotation--seed, and rotation--seed units—not flows or family rows—are the experimental units.",
+        },
+    ]
+    assert not table["Study evidence"].astype(str).str.fullmatch("Synthesis").any()
+
+
+def test_t03_records_prospective_freezes_and_mixed_evidence_timing() -> None:
+    table = thesis_assets._table_t3().set_index("Study")
+    assert table.loc["Study 5A", "Evidence phase"] == (
+        "Ontology and estimands frozen after Studies 1--4 existed but before artifact-only "
+        "threat-effect analysis over the prior Study 1, 2, and 4 source bundles"
+    )
+    assert table.loc["Study 5B", "Evidence phase"] == (
+        "9 prior U-T-C-B runs + 27 prospective missing-rotation runs; "
+        "mixed prior/prospective four-order synthesis"
+    )
 
 
 def test_policy_qualification_table_is_a_direct_frozen_projection(tmp_path: Path) -> None:
@@ -101,7 +231,7 @@ def test_vector_and_300_dpi_exports_are_byte_deterministic(tmp_path: Path) -> No
             figure = _figure_f1()
             outputs.append(export_figure(figure, root, FIGURE_STEMS["F1"]))
             plt.close(figure)
-    assert [_sha256(path) for path in outputs[0]] == [_sha256(path) for path in outputs[1]]
+    assert [_raw_sha256(path) for path in outputs[0]] == [_raw_sha256(path) for path in outputs[1]]
     png = (roots[0] / "png" / "F01_danids_pipeline.png").read_bytes()
     width = int.from_bytes(png[16:20], "big")
     height = int.from_bytes(png[20:24], "big")
@@ -203,47 +333,91 @@ def test_projection_checks_record_exact_frozen_counts_and_values(tmp_path: Path)
     assert checks["F9"] == {"plotted_order_rows": 1, "all_order_verdict": "NOT_SUPPORTED"}
 
 
-def test_manifest_verification_rejects_output_tampering(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _write_minimal_valid_manifest(
+    tmp_path: Path, *, create_source: bool
+) -> tuple[Path, Path, dict[str, Any]]:
     output_root = tmp_path / "thesis" / "assets"
-    source = tmp_path / "source.txt"
-    source.write_text("frozen", encoding="utf-8")
     with thesis_style():
         figure = _figure_f1()
-        figure_outputs = export_figure(figure, output_root, "shared")
+        template_outputs = export_figure(figure, output_root, FIGURE_STEMS["F1"])
         plt.close(figure)
-    table_root = output_root / "tables"
-    table_root.mkdir(parents=True)
-    table_csv = table_root / "shared.csv"
-    table_md = table_root / "shared.md"
-    table_csv.write_text("a\n1\n", encoding="utf-8")
-    table_md.write_text("| a |\n| --- |\n| 1 |\n", encoding="utf-8")
     captions = output_root / "captions.md"
-    captions.write_text("safe wording", encoding="utf-8")
-    source_record = {"path": "source.txt", "sha256": _sha256(source)}
+    captions.write_text("safe wording\n", encoding="utf-8", newline="\n")
     records = []
-    for display_id in FIGURE_STEMS:
+    for display_id, stem in FIGURE_STEMS.items():
+        if display_id == "F1":
+            figure_outputs = template_outputs
+        else:
+            figure_outputs = []
+            for template in template_outputs:
+                path = output_root / template.parent.name / f"{stem}{template.suffix}"
+                path.write_bytes(template.read_bytes())
+                figure_outputs.append(path)
+        source_records = []
+        for key in DISPLAY_SPECS[display_id].sources:
+            relative = SOURCE_PATHS[key]
+            source = tmp_path / relative
+            if create_source:
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("frozen\n", encoding="utf-8", newline="\n")
+            source_records.append(
+                {
+                    "path": relative,
+                    "sha256": _canonical_sha256(source) if create_source else "0" * 64,
+                    "hash_mode": _hash_mode(source),
+                }
+            )
         records.append(
             {
                 "display_id": display_id,
-                "source_artifacts": [source_record],
+                "display_type": "figure",
+                "chapter": DISPLAY_SPECS[display_id].chapter,
+                "generator": f"danids.evaluation.thesis_assets:_figure_{display_id.lower()}",
+                "source_artifacts": source_records,
                 "output_files": [_output_record(path, output_root) for path in figure_outputs],
+                "frozen_takeaway": DISPLAY_SPECS[display_id].takeaway,
             }
         )
-    for display_id in TABLE_STEMS:
+    table_root = output_root / "tables"
+    table_root.mkdir(parents=True)
+    for display_id, stem in TABLE_STEMS.items():
+        table_csv = table_root / f"{stem}.csv"
+        table_md = table_root / f"{stem}.md"
+        table_csv.write_text("a\n1\n", encoding="utf-8", newline="\n")
+        table_md.write_text("| a |\n| --- |\n| 1 |\n", encoding="utf-8", newline="\n")
+        source_records = []
+        for key in DISPLAY_SPECS[display_id].sources:
+            relative = SOURCE_PATHS[key]
+            source = tmp_path / relative
+            if create_source:
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("frozen\n", encoding="utf-8", newline="\n")
+            source_records.append(
+                {
+                    "path": relative,
+                    "sha256": _canonical_sha256(source) if create_source else "0" * 64,
+                    "hash_mode": _hash_mode(source),
+                }
+            )
         records.append(
             {
                 "display_id": display_id,
-                "source_artifacts": [source_record],
+                "display_type": "table",
+                "chapter": DISPLAY_SPECS[display_id].chapter,
+                "generator": f"danids.evaluation.thesis_assets:_table_{display_id.lower()}",
+                "source_artifacts": source_records,
                 "output_files": [
                     _output_record(table_csv, output_root),
                     _output_record(table_md, output_root),
                 ],
+                "frozen_takeaway": DISPLAY_SPECS[display_id].takeaway,
             }
         )
     manifest = {
         "artifact_version": ASSET_VERSION,
+        "digest_policy": DIGEST_POLICY,
+        "generation_command": GENERATION_COMMAND,
+        "scientific_processing": SCIENTIFIC_PROCESSING,
         "display_count": 14,
         "figure_count": 10,
         "table_count": 4,
@@ -252,11 +426,95 @@ def test_manifest_verification_rejects_output_tampering(
         "supplementary_files": [_output_record(captions, output_root)],
     }
     (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    monkeypatch.setattr(thesis_assets, "_resolve_sources", lambda _root: {})
+    return output_root, template_outputs[0], manifest
+
+
+def test_manifest_verification_rejects_output_tampering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output_root, first_svg, _manifest = _write_minimal_valid_manifest(tmp_path, create_source=True)
     monkeypatch.setattr(thesis_assets, "_projection_checks", lambda _sources: {})
     verify_thesis_assets(tmp_path, output_root)
-    figure_outputs[0].write_text("corrupt", encoding="utf-8")
+    first_svg.write_text("corrupt", encoding="utf-8")
     with pytest.raises(ValueError, match="generated output digest differs"):
+        verify_thesis_assets(tmp_path, output_root)
+
+
+def test_outputs_only_verification_is_strict_but_does_not_require_frozen_sources(
+    tmp_path: Path,
+) -> None:
+    output_root, _first_svg, manifest = _write_minimal_valid_manifest(tmp_path, create_source=False)
+    verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+    with pytest.raises(FileNotFoundError, match="missing frozen thesis sources"):
+        verify_thesis_assets(tmp_path, output_root)
+
+    captions = output_root / "captions.md"
+    captions.write_bytes(captions.read_bytes().replace(b"\n", b"\r\n"))
+    verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+
+    manifest["displays"][0]["chapter"] = "Wrong chapter"
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="display metadata differs"):
+        verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+    manifest["displays"][0]["chapter"] = DISPLAY_SPECS["F1"].chapter
+
+    manifest["displays"][0]["source_artifacts"][0]["path"] = "wrong/source.json"
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="source provenance differs"):
+        verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+    first_source_key = DISPLAY_SPECS["F1"].sources[0]
+    manifest["displays"][0]["source_artifacts"][0]["path"] = SOURCE_PATHS[first_source_key]
+
+    manifest["generation_command"] = "wrong command"
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="generation command differs"):
+        verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+    manifest["generation_command"] = GENERATION_COMMAND
+
+    actual_bytes = manifest["supplementary_files"][0]["bytes"]
+    manifest["supplementary_files"][0]["bytes"] = -1
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="byte count is invalid"):
+        verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+    manifest["supplementary_files"][0]["bytes"] = actual_bytes + 1
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="supplementary output digest differs"):
+        verify_thesis_assets(tmp_path, output_root, verify_sources=False)
+
+
+def test_text_sha256_is_stable_across_lf_and_crlf_without_weakening_binary_hashes(
+    tmp_path: Path,
+) -> None:
+    lf = tmp_path / "lf.md"
+    crlf = tmp_path / "crlf.md"
+    lf.write_bytes(b"first\nsecond\n")
+    crlf.write_bytes(b"first\r\nsecond\r\n")
+    assert _raw_sha256(lf) != _raw_sha256(crlf)
+    assert _canonical_sha256(lf) == _canonical_sha256(crlf)
+    assert _hash_mode(lf) == "canonical-lf-utf8"
+
+    raw_lf = tmp_path / "lf.bin"
+    raw_crlf = tmp_path / "crlf.bin"
+    raw_lf.write_bytes(lf.read_bytes())
+    raw_crlf.write_bytes(crlf.read_bytes())
+    assert _canonical_sha256(raw_lf) != _canonical_sha256(raw_crlf)
+    assert _hash_mode(raw_lf) == "raw-bytes"
+
+
+def test_manifest_verification_rejects_digest_policy_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output_root = tmp_path / "thesis" / "assets"
+    output_root.mkdir(parents=True)
+    manifest = {
+        "artifact_version": ASSET_VERSION,
+        "digest_policy": {**DIGEST_POLICY, "algorithm": "sha1"},
+        "generation_command": GENERATION_COMMAND,
+        "scientific_processing": SCIENTIFIC_PROCESSING,
+    }
+    (output_root / "visual_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(thesis_assets, "_resolve_sources", lambda _root: {})
+    with pytest.raises(ValueError, match="digest policy differs"):
         verify_thesis_assets(tmp_path, output_root)
 
 

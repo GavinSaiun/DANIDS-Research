@@ -1,4 +1,4 @@
-"""Thin command-line interface for dataset validation and benchmark dry runs."""
+"""DANIDS Study 1--5 execution, artifact evaluation, and thesis-release utilities."""
 
 from __future__ import annotations
 
@@ -56,6 +56,10 @@ from danids.policy.development import RollIn
 from danids.policy.health_artifact import (
     build_health_model_artifact,
     validate_health_model_artifact,
+)
+from danids.utils.evidence_archive import (
+    build_frozen_evidence_archive,
+    validate_frozen_evidence_archive,
 )
 from danids.utils.reproducibility import set_global_seed
 
@@ -503,6 +507,30 @@ def _generate_thesis_assets(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_frozen_evidence_archive(args: argparse.Namespace) -> int:
+    repo_root = Path(args.repo_root or Path.cwd()).resolve()
+    result = build_frozen_evidence_archive(repo_root, Path(args.output_dir))
+    validated = validate_frozen_evidence_archive(result.archive_path, result.sidecar_path)
+    if validated != result:
+        raise RuntimeError("frozen evidence archive validation result differs from build result")
+    print(
+        json.dumps(
+            {
+                "archive": str(result.archive_path),
+                "archive_size_bytes": result.archive_size_bytes,
+                "archive_sha256": result.archive_sha256,
+                "authority_sha256": result.authority_sha256,
+                "internal_file_count": result.source_file_count,
+                "manifest_sha256": result.manifest_sha256,
+                "sidecar": str(result.sidecar_path),
+                "status": "valid",
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -807,6 +835,14 @@ def build_parser() -> argparse.ArgumentParser:
     thesis_assets.add_argument("--repo-root", type=Path)
     thesis_assets.add_argument("--output-dir", type=Path)
     thesis_assets.set_defaults(handler=_generate_thesis_assets)
+
+    evidence_archive = subparsers.add_parser(
+        "build-frozen-evidence-archive",
+        help="build and validate the deterministic DANIDS 2.0 frozen-evidence archive",
+    )
+    evidence_archive.add_argument("--repo-root", type=Path)
+    evidence_archive.add_argument("--output-dir", required=True, type=Path)
+    evidence_archive.set_defaults(handler=_build_frozen_evidence_archive)
     return parser
 
 

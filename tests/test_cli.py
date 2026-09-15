@@ -89,3 +89,10 @@ def test_task009_launcher_and_evaluator_cli_contracts() -> None:
     )
     assert evaluate.study1_run_dirs == [Path("runs/E1_STATIC_MLP_T-C-B-U_s42")]
     assert evaluate.study2_run_dirs == [Path("runs/E2_ER_T-C-B-U_B100_D1_s42")]
+
+
+def test_release_archive_cli_contract() -> None:
+    args = build_parser().parse_args(["build-frozen-evidence-archive", "--output-dir", "dist"])
+    assert args.command == "build-frozen-evidence-archive"
+    assert args.output_dir == Path("dist")
+    assert args.repo_root is None
