@@ -226,11 +226,11 @@ stale nested-manifest content is rejected before publication.
 - [Experiment protocol](docs/experiment_protocol.md) -- run and leakage contracts
 - [Attack ontology](docs/attack_ontology.md) -- native and semantic family rules
 - [Thesis blueprint](docs/thesis_master_plan.md) -- chapter/evidence map and wording guardrails
-- [License decision](docs/LICENSE_DECISION_REQUIRED.md) -- unresolved public-release licensing
+- [Licensing](docs/LICENSING.md) -- MIT terms and third-party material boundary
 
 ## Citation and license
 
-Citation metadata is provided in [CITATION.cff](CITATION.cff). No public-use license has
-yet been selected; the current package metadata says **All rights reserved**. See
-[`docs/LICENSE_DECISION_REQUIRED.md`](docs/LICENSE_DECISION_REQUIRED.md). Absence of a
-license is not permission to copy, modify, or redistribute the work.
+Citation metadata is provided in [CITATION.cff](CITATION.cff). DANIDS 2.0 is released
+under the [MIT License](LICENSE); the package and citation metadata use the SPDX
+identifier `MIT`. See [`docs/LICENSING.md`](docs/LICENSING.md) for the licensing scope
+and the third-party material boundary.
