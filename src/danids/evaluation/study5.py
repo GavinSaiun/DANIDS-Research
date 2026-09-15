@@ -556,7 +556,8 @@ def _normalise_native_rows(
             raise Study5ThreatAuditError(str(exc)) from exc
         if row["mapping_status"] != mapping.mapping_status.value:
             raise Study5ThreatAuditError("native mapping status differs from TASK-007")
-        if _as_str(row["semantic_family"]) != (mapping.semantic_family or ""):
+        semantic_family = _as_str(row["semantic_family"])
+        if semantic_family != (mapping.semantic_family or ""):
             raise Study5ThreatAuditError("native semantic family differs from TASK-007")
         support = _as_int(row["support"], "native support")
         if support <= 0:
@@ -603,6 +604,7 @@ def _normalise_native_rows(
         learned_status = _as_str(row["learned_state_status"])
         if learned_status not in {"", "LEARNED_REFERENCE", "NOT_LEARNED_NO_UPDATE"}:
             raise Study5ThreatAuditError("native row has an invalid learned-state status")
+        update_evidence_domain = _as_str(row["update_evidence_domain"])
         if not _is_sha256(row["model_digest"]):
             raise Study5ThreatAuditError("native row model digest must be SHA-256")
         try:
@@ -667,6 +669,9 @@ def _normalise_native_rows(
         row["wilson95_low"] = low
         row["wilson95_high"] = high
         row["supported_n50"] = contract.estimands.support.is_supported(support)
+        row["semantic_family"] = semantic_family
+        row["learned_state_status"] = learned_status
+        row["update_evidence_domain"] = update_evidence_domain
         result.append(row)
 
     by_evaluation: dict[str, list[dict[str, object]]] = defaultdict(list)

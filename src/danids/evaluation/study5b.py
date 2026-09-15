@@ -423,6 +423,10 @@ def _as_bool(value: object, context: str) -> bool:
     raise Study5BError(f"{context} must be boolean")
 
 
+def _as_optional_text(value: object) -> str:
+    return "" if value is None else str(value)
+
+
 def _fraction_text(value: Fraction) -> str:
     return f"{value.numerator}/{value.denominator}"
 
@@ -1329,7 +1333,7 @@ def _project_trajectory_row(row: Mapping[str, object], *, family_level: str) -> 
         native_label = str(row["native_attack_label"])
         family_identity = f"{domain}::{native_label}"
         mapping_status = str(row["mapping_status"])
-        semantic_family = str(row["semantic_family"])
+        semantic_family = _as_optional_text(row["semantic_family"])
     else:
         native_label = ""
         family_identity = str(row["semantic_family"])
@@ -1380,7 +1384,7 @@ def _project_trajectory_row(row: Mapping[str, object], *, family_level: str) -> 
         "physical_slice_digest": str(row["physical_slice_digest"]),
         "evaluation_slice_digest": str(row["evaluation_slice_digest"]),
         "model_digest": str(row["model_digest"]),
-        "learned_state_status": str(row["learned_state_status"]),
+        "learned_state_status": _as_optional_text(row["learned_state_status"]),
     }
 
 

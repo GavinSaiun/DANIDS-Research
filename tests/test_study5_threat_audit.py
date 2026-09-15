@@ -357,6 +357,97 @@ def test_artifact_only_evaluation_writes_exact_contract_and_self_validates(audit
     validate_study5_threat_audit(audit)
 
 
+def test_native_normalisation_canonicalises_nullable_text_fields() -> None:
+    contract = study5.load_study5_contract(CONTRACT)
+    experiment = "E2_NAIVEFT_U-T-C-B_B100_D1_s42"
+    fresh = _row(
+        study="S2",
+        experiment=experiment,
+        method="naive_ft",
+        event="pre_adapt",
+        event_index=2,
+        stage=2,
+        domain="U",
+        label="DoS",
+        family="Availability / Impact",
+        support=100,
+        tp=90,
+    )
+    fresh["learned_state_status"] = None
+    fresh["update_evidence_domain"] = None
+    normalised_fresh = study5._normalise_native_rows([fresh], contract)[0]
+    assert normalised_fresh["learned_state_status"] == ""
+    assert normalised_fresh["update_evidence_domain"] == ""
+    assert normalised_fresh["semantic_family"] == "Availability / Impact"
+
+    prior = _row(
+        study="S2",
+        experiment=experiment,
+        method="naive_ft",
+        event="pre_adapt",
+        event_index=2,
+        stage=2,
+        domain="U",
+        label="DoS",
+        family="Availability / Impact",
+        support=100,
+        tp=90,
+    )
+    normalised_prior = study5._normalise_native_rows([prior], contract)[0]
+    assert normalised_prior["learned_state_status"] == ""
+    assert normalised_prior["update_evidence_domain"] == ""
+
+    learned = _row(
+        study="S2",
+        experiment=experiment,
+        method="naive_ft",
+        event="post_adapt",
+        event_index=3,
+        stage=2,
+        domain="T",
+        label="xss",
+        family="Application / Web Injection",
+        support=100,
+        tp=80,
+        learned="LEARNED_REFERENCE",
+    )
+    normalised_learned = study5._normalise_native_rows([learned], contract)[0]
+    assert normalised_learned["learned_state_status"] == "LEARNED_REFERENCE"
+    assert normalised_learned["update_evidence_domain"] == "T"
+    assert normalised_learned["semantic_family"] == "Application / Web Injection"
+
+    unmapped = _row(
+        study="S2",
+        experiment=experiment,
+        method="naive_ft",
+        event="pre_adapt",
+        event_index=2,
+        stage=2,
+        domain="U",
+        label="Analysis",
+        family="",
+        support=100,
+        tp=75,
+    )
+    unmapped.update(
+        {
+            "mapping_status": "UNMAPPED",
+            "semantic_family": None,
+            "novelty_status": "NOT_APPLICABLE",
+            "family_label_available_before_prediction": "",
+            "label_availability_status": "NOT_APPLICABLE_UNMAPPED",
+            "learned_state_status": None,
+            "update_evidence_domain": None,
+        }
+    )
+    normalised_unmapped = study5._normalise_native_rows([unmapped], contract)[0]
+    assert normalised_unmapped["mapping_status"] == "UNMAPPED"
+    assert normalised_unmapped["semantic_family"] == ""
+    assert normalised_unmapped["learned_state_status"] == ""
+    assert normalised_unmapped["update_evidence_domain"] == ""
+    assert "None" not in study5._csv_text(study5.NATIVE_COLUMNS, [normalised_unmapped])
+
+
 def test_evaluation_is_write_once(audit: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         study5,
