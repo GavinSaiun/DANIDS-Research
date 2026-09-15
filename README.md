@@ -1,210 +1,236 @@
-# DANIDS-Research
+# DANIDS Research
 
-Research codebase for **DANIDS: Deployment-Aware Network Intrusion Detection under Sequential Cross-Domain Shift**.
+> **Final research status (15 September 2026):** the empirical programme is frozen
+> after Study 5B. Studies 1--5 are complete; Study 6 external validation was not
+> performed and is future work.
 
-## Research objective
+Research code, frozen evidence, and thesis displays for **DANIDS: Deployment-Aware
+Network Intrusion Detection under Sequential Cross-Domain Shift**.
 
-DANIDS studies **Sequential Cross-Domain Continual Intrusion Detection (SCD-CID)**: one evolving intrusion detector is deployed across multiple heterogeneous network environments while remaining responsible for previously encountered domains.
+## What DANIDS is
 
-The project investigates whether the detector can:
+DANIDS studies **Sequential Cross-Domain Continual Intrusion Detection (SCD-CID)**. One
+evolving binary intrusion detector is deployed across heterogeneous network domains and
+remains responsible for domains it encountered earlier. The primary protocol is
+chronological and prequential: each window is predicted before any permitted learning
+from that window.
 
-- distinguish distribution shift from actual operational model harm;
-- operate under limited and delayed analyst supervision;
-- select the minimum necessary adaptation intervention;
-- retain competence on previously encountered networks and attack families;
-- expose attack-family failures that aggregate binary metrics may hide;
-- generalise beyond the harmonised development dataset family.
+The controlled benchmark uses four related UQ NetFlow-v3 domains:
 
-## Core datasets
+- **U:** NF-UNSW-NB15-v3
+- **T:** NF-ToN-IoT-v3
+- **B:** NF-BoT-IoT-v3
+- **C:** NF-CSE-CIC-IDS2018-v3
 
-Development benchmark:
+## Central thesis
 
-- NF-UNSW-NB15-v3
-- NF-ToN-IoT-v3
-- NF-BoT-IoT-v3
-- NF-CSE-CIC-IDS2018-v3
+> Across sequential network domains, operational harm was substantially easier to
+> recognise than to repair: observable health signals identified many operating-envelope
+> violations, but scheduled adaptation, replay and a frozen selective controller did not
+> reliably restore safety, with outcomes governed by false-alarm burden, threat-family
+> composition and deployment order.
 
-External holdout:
+The evidence follows one connected story:
 
-- CICIoT2023
+```text
+cross-domain change
+        |
+        v
+operational harm
+        |
+        v
+intervention
+        |
+        v
+recoverability
+        |
+        v
+threat-family granularity and deployment order
+```
 
-Large datasets, checkpoints, and generated run outputs are not intended to be committed to this repository.
+The contribution is the leakage-safe separation of these questions, not a claim that
+DANIDS solved safe adaptation.
 
-## Source-of-truth documents
+## Studies 1--5
 
-- [`docs/research_specification.md`](docs/research_specification.md) — research questions, hypotheses, methodology, architecture direction, metrics, and experiment hierarchy.
-- [`docs/decisions.md`](docs/decisions.md) — methodological decision log and change-control record.
-- [`docs/attack_ontology.md`](docs/attack_ontology.md) — native attack labels, semantic harmonisation rules, and history-relative novelty definition.
-- [`docs/experiment_protocol.md`](docs/experiment_protocol.md) — run lifecycle, configuration contract, leakage rules, output schema, and statistical/reproducibility protocol.
+- **Study 1:** static cross-domain transfer across all four source domains.
+- **Study 2:** continual-learning baselines on U-T-C-B.
+- **Study 3:** same-window model-health screening under grouped-domain protocols.
+- **Study 4:** the confirmatory DANIDS-Core intervention comparison across four rotations.
+- **Study 5A:** an artifact-only audit of family-conditioned binary detection recall.
+- **Study 5B:** deployment-order robustness of replay-aware retention.
+
+Start with [THESIS_RESULTS.md](THESIS_RESULTS.md) for the exact six-row study map,
+bounded conclusions, entry artifacts, and thesis displays.
+
+## Frozen hypothesis ledger
+
+```text
+H1  SUPPORTED
+H2  SUPPORTED
+H3  NOT_SUPPORTED
+H4  NOT_SUPPORTED
+H6  NOT_TESTABLE
+H7  NOT_SUPPORTED
+H8  NOT_TESTABLE
+H9  PARTIAL
+H10 PARTIAL
+```
+
+This is the complete final ledger. H5 has no assigned verdict and is not silently
+reintroduced.
+
+## Major findings
+
+- Static cross-domain failure was substantial and asymmetric. Study 1 sequence positions
+  are reporting positions, not causal order treatments.
+- Observable health signals supported same-window harm screening, but combined and
+  sparsely supervised signals did not dominate every comparator or grouped protocol.
+- DANIDS-Core reduced accepted update frequency relative to Always-Adapt, not requested
+  labels, and did not maintain comparable operating-envelope compliance.
+- Most observed harm remained unrecoverable under the frozen B100/D1 and A0--A4 regime.
+  This does not show that safe adaptation is impossible in general.
+- Aggregate binary recall could conceal supported family-specific loss. Study 5A measures
+  family-conditioned binary detection recall, not attribution or open-set recognition.
+- Replay effects varied and reversed by deployment order. The final H7 synthesis mixes
+  prior U-T-C-B evidence with a prospective three-rotation extension.
+
+## Scope and non-claims
+
+The evidence is bounded to four related NetFlow-v3 domains, one compact MLP architecture,
+three seeds, one B100/D1 supervision regime, the A0--A4 action space, and sparse shared
+semantic-family support with primary physical-slice support `n >= 50`.
+
+CICIoT2023 was reserved for external validation, but Study 6 was **not performed**. The
+repository therefore makes no external CICIoT2023 validation claim. It also makes no
+claim of anticipatory early warning, multiclass attack attribution, real-world zero-day
+detection, explicit `UNKNOWN` recognition, or open-set performance. DANIDS-Policy was
+disabled before fitting; the Offline Oracle is a non-deployable one-step comparator.
+
+## Repository structure
+
+```text
+configs/          versioned experiment and Study-5 contracts
+docs/             scientific specification, decisions, protocols, and study guides
+src/danids/       reusable data, streaming, model, adaptation, and evaluation modules
+tests/            scientific-invariant and implementation tests
+study1/ ... study5/
+                  workspace-local frozen result and contract bundles (ignored by Git)
+thesis/assets/    generated figures, tables, captions, and visual manifest
+```
+
+Raw datasets, result bundles, large checkpoints, and ordinary generated runs are not
+distributed in the GitHub source repository. The canonical Study 1--5 directories exist
+in the research workspace and are intentionally ignored by Git pending an immutable
+public archive. Do not substitute scratch, smoke, or intermediate outputs for them.
 
 ## Installation
 
-Use the existing Python 3.11 Conda environment; the project does not create or
-manage a virtual environment:
+Python 3.11 is required. Create or update the recorded Conda environment, then activate
+it:
 
 ```powershell
+conda env create --file environment.yml
 conda activate danids
+```
+
+If the `danids` environment already exists:
+
+```powershell
+conda env update --name danids --file environment.yml --prune
+conda activate danids
+```
+
+Alternatively, in an existing Python 3.11 environment:
+
+```powershell
 python -m pip install -e ".[dev]"
 ```
 
-`environment.yml` records the same Python/environment name for reproducible
-Conda setup or update; it does not create an environment during installation.
+## Dataset configuration
 
-## Local dataset configuration
+The raw datasets remain outside Git. Copy `configs/datasets.example.yaml` to the ignored
+`configs/datasets.local.yaml`, then set `DANIDS_U_PATH`, `DANIDS_T_PATH`,
+`DANIDS_B_PATH`, and `DANIDS_C_PATH` to the four CSV files. Explicit local paths may be
+used in the ignored file instead.
 
-Raw datasets stay outside Git. Copy `configs/datasets.example.yaml` to the
-ignored `configs/datasets.local.yaml`, then set `DANIDS_U_PATH`,
-`DANIDS_T_PATH`, `DANIDS_B_PATH`, and `DANIDS_C_PATH` to the four CSV files.
-Explicit absolute paths can be placed in the ignored local file instead.
-
-The required v3 schema defaults are `Label`, `Attack`,
-`FLOW_START_MILLISECONDS`, `IPV4_SRC_ADDR`, and `IPV4_DST_ADDR`. Column names
-can be overridden per dataset in local configuration when a verified release
-uses different names.
-
-The primary common feature contract excludes source/destination port columns.
-Port-inclusive features are reserved for a future explicitly named ablation.
-
-## Benchmark foundation
-
-```text
-configs/
-  datasets.yaml
-  default.yaml
-  experiments/
-
-docs/
-
-src/danids/
-  data/
-  models/
-  streaming/
-  shift/
-  health/
-  continual/
-  adaptation/
-  policy/
-  attacks/
-  evaluation/
-  utils/
-
-scripts/
-  prepare_data.py
-  run_experiment.py
-  generate_results.py
-
-tests/
-
-runs/        # ignored; generated experiment outputs
-results/     # ignored or selectively exported
-```
-
-## Development workflow
-
-`main` should remain stable. Research changes should be developed through focused branches / pull requests, for example:
-
-- `research/spec-v1`
-- `benchmark/sequential-stream`
-- `baseline/experience-replay`
-- `health/harm-monitor`
-- `feature/attack-ontology`
-- `danids/core-policy`
-
-Every reported experiment should be traceable to:
-
-```text
-Git commit SHA + experiment config + dataset split manifest
-```
-
-Validate schemas, generate immutable manifests, and inspect a dry run:
+Validate the configured schemas before any experiment:
 
 ```powershell
 danids validate --datasets-config configs/datasets.local.yaml
-danids generate-manifests `
-  --datasets-config configs/datasets.local.yaml `
-  --experiment-config configs/experiments/task001_u-t-c-b.yaml `
-  --output-dir manifests/task001
-danids dry-run `
-  --datasets-config configs/datasets.local.yaml `
-  --experiment-config configs/experiments/task001_u-t-c-b.yaml
 ```
 
-Run all quality checks:
+Preprocessing must never be fit on future or permanent-holdout data. Permanent holdouts
+must never enter training, querying, replay, calibration, policy tuning, or audit memory.
+
+## Verification and reproduction
+
+In a clean source checkout, inspect the checked-in thesis display pack without raw data
+or the ignored result bundles:
 
 ```powershell
-pytest
-ruff check .
-ruff format --check .
-mypy
-python -m pip check
+python -m pytest tests/test_release_metadata.py
+python -c "from pathlib import Path; from danids.evaluation.thesis_assets import verify_thesis_assets; verify_thesis_assets(Path('.'), verify_sources=False)"
+git diff --exit-code -- thesis/assets
+git status --short -- thesis/assets
 ```
 
-See [`docs/sequential_benchmark_foundation.md`](docs/sequential_benchmark_foundation.md)
-for API guarantees and implementation assumptions.
+Artifact-backed verification and regeneration additionally require restoration of the
+exact ignored Study 1--5 bundles in the paths recorded by the evidence freeze. With those
+sources present, run the thesis-asset tests and generate into a separate temporary
+directory as described in [REPRODUCIBILITY.md](REPRODUCIBILITY.md). Regeneration does not
+rerun training or rescore models.
 
-## Current status
+Full experiment reproduction requires separately obtained raw datasets, substantially more
+compute, and the per-study commands and contracts. See [REPRODUCIBILITY.md](REPRODUCIBILITY.md)
+before starting; it distinguishes artifact verification from expensive reruns.
 
-**TASK-009 — Study 5B all-order replay-retention robustness.** The repository now
-freezes and validates a 27-run prospective extension of the Study-2 NaiveFT, ER, and
-FT-Mem comparison across the three previously missing deployment rotations. It keeps
-that extension distinct from the previously inspected U-T-C-B evidence, provides a
-serial fail-closed launcher, and defines an artifact-only 36-run H7 synthesis with
-family-, domain-, and rotation-seed-level aggregation. See
-[`docs/study5_replay_retention.md`](docs/study5_replay_retention.md).
+## Frozen evidence and thesis assets
 
-**TASK-008 — Study 5A native and semantic threat audit.** The package now provides the
-write-once `task008-study5a-threat-audit-v1` evaluator over the exact reviewed Study-1,
-Study-2, and Study-4 artifact rosters. It validates source provenance and physical support,
-then emits canonical native-family cells and deterministic semantic, novelty,
-hidden-failure, transfer, trajectory, and forgetting tables without opening raw flow data
-or rescoring a model. See
-[`docs/study5_native_threat_audit.md`](docs/study5_native_threat_audit.md).
+The complete evidence boundary, hypothesis ledger, timing, limitations, and 42 canonical
+workspace artifact paths are frozen in
+[`docs/thesis_evidence_freeze.md`](docs/thesis_evidence_freeze.md). Those ignored bundles
+are scheduled for publication at release:
 
-**TASK-007 — Study 5 ontology and estimand freeze.** The repository now contains a
-versioned, fingerprint-bound exact native-label ontology and strict validation contract.
-Study-5 family detection, physical support, domain-entry novelty, hidden-failure,
-learned/final retention, and H6--H8 scope are frozen prospectively. TASK-007 computes no
-method effects and does not run Study 5A. See
-[`docs/study5_threat_level_behaviour.md`](docs/study5_threat_level_behaviour.md) and
-[`docs/attack_ontology.md`](docs/attack_ontology.md).
+```text
+TO_BE_PUBLISHED_AT_RELEASE
+```
 
-**TASK-006 — Study 4 intervention and DANIDS-Core.** The package provides explicit
-A0–A4 candidate actions with rollback, replay/audit capability separation, delayed
-incremental supervision, and the prospectively frozen transparent DANIDS-Core state
-machine. The chronological E4 harness executes `STATIC`, `ALWAYS_ADAPT`,
-`DANIDS_CORE`, and the non-deployable one-step `OFFLINE_ORACLE` with write-once
-provenance and artifact-only aggregation. The full confirmatory matrix completed as 48
-validated runs; DANIDS-Policy failed its frozen qualification gate and remained
-disabled. The
-`POLICY_DEVELOPMENT_V1` runner now generates isolated A0--A4 counterfactual
-action trials from five frozen roll-ins and the artifact-only evaluator reports
-physical-group-safe policy support without fitting the final policy. See
-[`docs/study4_core_policy.md`](docs/study4_core_policy.md) and
-[`docs/study4_execution_harness.md`](docs/study4_execution_harness.md), plus
-[`docs/study4_policy_development.md`](docs/study4_policy_development.md) and
-[`docs/study4_policy_qualification.md`](docs/study4_policy_qualification.md).
+The checked-in public thesis assets are in [`thesis/assets/`](thesis/assets/), with
+provenance and SHA-256 digests in
+[`visual_manifest.json`](thesis/assets/visual_manifest.json). Artifact-backed
+regeneration uses `python -m danids generate-thesis-assets --output-dir <new-directory>`
+only after the frozen source bundles have been restored. It performs no training,
+rescoring, or hypothesis recomputation.
 
-**TASK-005 — Study 3 model health.** The package now extracts leakage-safe
-window health signals from exact frozen Study-1 states, assigns Wilson-supported
-SAFE/UNCERTAIN/HARMFUL evaluator labels, supports delayed-label health features,
-and evaluates interpretable and nonlinear predictors with domain-out and
-transition-out folds. See
-[`docs/study3_model_health.md`](docs/study3_model_health.md).
+With all ten required ignored evidence roots present, build and validate the local
+write-once evidence package in a new output directory:
 
-**TASK-004 — Study 2 continual baselines.** The package now imports an exact
-reviewed Study-1 deployment state and provides deterministic delayed
-supervision, predict-first continual execution, NaiveFT, diagonal EWC,
-Experience Replay, FT-Mem, continual/resource metrics, and strict artifact-only
-aggregation. See
-[`docs/study2_continual_baselines.md`](docs/study2_continual_baselines.md).
+```powershell
+python -m danids build-frozen-evidence-archive --output-dir dist
+```
 
-The preceding TASK-003 infrastructure provides four frozen source rotations,
-seed/role-safe manifest reuse, and strict Study-1 artifact aggregation. See
-[`docs/study1_static_transfer_matrix.md`](docs/study1_static_transfer_matrix.md).
+This creates `DANIDS-2.0-frozen-evidence.zip` and its
+`DANIDS-2.0-frozen-evidence.archive.json` integrity sidecar. The external archive
+location remains `TO_BE_PUBLISHED_AT_RELEASE`. A packaged, checked-in authority digest
+binds the exact frozen path/size/SHA-256 inventory; missing, additional, replaced, or
+stale nested-manifest content is rejected before publication.
 
-The underlying TASK-002 baseline provides the disk-backed chronological
-materialisation path, initial-training-only numeric
-preprocessing, the frozen source-trained MLP, validation-only checkpoint and
-threshold selection, prequential target evaluation, and reconstructible
-metrics/checkpoint outputs. See
-[`docs/static_mlp_baseline.md`](docs/static_mlp_baseline.md).
+## Documentation map
+
+- [Results guide](THESIS_RESULTS.md) -- six-study navigation and bounded conclusions
+- [Reproducibility guide](REPRODUCIBILITY.md) -- environments, data, provenance, and reruns
+- [Evidence freeze](docs/thesis_evidence_freeze.md) -- final scientific result boundary
+- [Research specification](docs/research_specification.md) -- historical methodological source
+- [Decision log](docs/decisions.md) -- change control through final decision D052
+- [Experiment protocol](docs/experiment_protocol.md) -- run and leakage contracts
+- [Attack ontology](docs/attack_ontology.md) -- native and semantic family rules
+- [Thesis blueprint](docs/thesis_master_plan.md) -- chapter/evidence map and wording guardrails
+- [Licensing](docs/LICENSING.md) -- MIT terms and third-party material boundary
+
+## Citation and license
+
+Citation metadata is provided in [CITATION.cff](CITATION.cff). DANIDS 2.0 is released
+under the [MIT License](LICENSE); the package and citation metadata use the SPDX
+identifier `MIT`. See [`docs/LICENSING.md`](docs/LICENSING.md) for the licensing scope
+and the third-party material boundary.

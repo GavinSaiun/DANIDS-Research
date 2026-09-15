@@ -1,5 +1,14 @@
 # DANIDS Research Specification v1.0
 
+> **Final status note (2026-09-15):** the empirical programme is frozen after Study 5B
+> and Study 6 is `NO-GO`; external CICIoT2023 validation was not performed. This
+> specification is preserved as the historical methodological source of truth, so its
+> prospective language and success ladder must not be read as final results. The final
+> result-informed evidence boundary, exact hypothesis ledger, conclusions, limitations,
+> and wording guardrails are in
+> [`thesis_evidence_freeze.md`](thesis_evidence_freeze.md) and decision D052 in
+> [`decisions.md`](decisions.md).
+
 ## 1. Working title
 
 **DANIDS: Deployment-Aware Network Intrusion Detection under Sequential Cross-Domain Shift**

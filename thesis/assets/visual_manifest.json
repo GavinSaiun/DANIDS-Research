@@ -1,5 +1,12 @@
 {
   "artifact_version": "danids-thesis-assets-v1",
+  "digest_policy": {
+    "algorithm": "sha256",
+    "binary_input": "raw bytes",
+    "bytes_field": "length of the hash input after the selected hash mode",
+    "encoding": "lowercase hexadecimal",
+    "text_input": "UTF-8 bytes after CRLF and CR are canonicalised to LF"
+  },
   "display_count": 14,
   "displays": [
     {
@@ -11,28 +18,33 @@
       "output_files": [
         {
           "bytes": 10179,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F01_danids_pipeline.svg",
           "sha256": "1c7902f898e5460d73cd049c6f4442a419d00b74423040f3d22e8304a0f208af"
         },
         {
           "bytes": 19550,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F01_danids_pipeline.pdf",
           "sha256": "bb4457acea4c2fcd3c920a1c640ce76750785e50a83150353fb7f5cd5b188e01"
         },
         {
           "bytes": 148081,
+          "hash_mode": "raw-bytes",
           "path": "png/F01_danids_pipeline.png",
           "sha256": "9e9a1de13b5a88a05a6ba109acb3bed5cb5913633301eb38fd4ea8cf0942b28a"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_evidence_freeze.md",
-          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/decisions.md",
-          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+          "sha256": "031198fd5be7f1afc930672488493d4467da6d59f1180cea6c43291f4d30bdd6"
         }
       ]
     },
@@ -44,29 +56,54 @@
       "generator": "danids.evaluation.thesis_assets:_figure_f2",
       "output_files": [
         {
-          "bytes": 15721,
+          "bytes": 15748,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F02_protocol_information_boundary.svg",
-          "sha256": "6defb858c839ed68b5e18c03cebff6729859ed605699265b7d8113f831046624"
+          "sha256": "72183ed85b578065bcd302db6c1a00bdb073eedc0df54a919d4229c3533cc42a"
         },
         {
-          "bytes": 25201,
+          "bytes": 25536,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F02_protocol_information_boundary.pdf",
-          "sha256": "aa5d92607039eb996e36740d74469db2df87e3b6ea33c992eff81dc8de32090e"
+          "sha256": "0748efb024686719a26bc0d14d0a550462e6df760202489b6f43c714c54e0fff"
         },
         {
-          "bytes": 241781,
+          "bytes": 247911,
+          "hash_mode": "raw-bytes",
           "path": "png/F02_protocol_information_boundary.png",
-          "sha256": "7b95cbede8a44a2024ecfaaf5e0f61948b3858c0688d4d558f39325581e19e63"
+          "sha256": "b311f1b2bf9222dd3f308e4c127a84855f5d3d3f32532df4880e20c3fb048665"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_evidence_freeze.md",
-          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/decisions.md",
-          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+          "sha256": "031198fd5be7f1afc930672488493d4467da6d59f1180cea6c43291f4d30bdd6"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study3/health-s42-s44/evaluation_contract.json",
+          "sha256": "bf651c228d2674eb0b46f322bda89edc86bdc74e2dc082b32084771f5ab7d767"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study4/e4-confirmatory-final/evaluation_contract.json",
+          "sha256": "f6bef930198e022b4fd9bbe56ee6526b9abfdd912a9c5c7ed98cf9fe812c36ee"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/threat-audit-v1/study5_contract.json",
+          "sha256": "2505d5b166bb6ee45b31a60b56c62ba8d50fed176307e482d51abe36c8723eed"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/task009-study5b-all-order-replay-v1/task009_contract.json",
+          "sha256": "479b302432515395503201c11252e843285a94668cf4065bf1c0eccabbb82fc2"
         }
       ]
     },
@@ -78,29 +115,34 @@
       "generator": "danids.evaluation.thesis_assets:_figure_f3",
       "output_files": [
         {
-          "bytes": 38937,
+          "bytes": 38408,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F03_static_transfer.svg",
-          "sha256": "dd1f4860135d00cfcf7148f8bcb0a91299dc275692a58c1b9fae0101133eca00"
+          "sha256": "77bab8e4d4fbad0493cdca3e31a31789714d6b4b3c3d8f0329917380bab02482"
         },
         {
-          "bytes": 28565,
+          "bytes": 28155,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F03_static_transfer.pdf",
-          "sha256": "ba41806e99e141685bd300e313ba44001164ea5c21e26aaf47dfefd338c51688"
+          "sha256": "1d93b27ed12239f0a8772870240d8131d61fb4055cefdb88816f47b2375c3dca"
         },
         {
-          "bytes": 243938,
+          "bytes": 280094,
+          "hash_mode": "raw-bytes",
           "path": "png/F03_static_transfer.png",
-          "sha256": "1be5d680a654b3f5583206c6df4dba8ba165f89485c1f0887eff39ed0ec73e12"
+          "sha256": "6cd3ad59d175186977c069babf273a55b4993216d838c03e1ef24a3b86357781"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study1/static-s42-s44/study1_seed_summary.csv",
-          "sha256": "e4d07b94c3a26ea137ee2ad16bfb522aedde28dea266463ad19a1059fc1f2448"
+          "sha256": "5059d8286e170af601733158f7a1762a9dd44b997735be326ae72da51c73de46"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study1/static-s42-s44/study1_transfer_long.csv",
-          "sha256": "352d41f86010d6456a167f2a55da32000081e2a456ced9544ecaad11db57315f"
+          "sha256": "63dcbbec250fdc01a1766a1f834ba5e3bfd98eafd51818e10a7e0a05496727eb"
         }
       ]
     },
@@ -112,33 +154,39 @@
       "generator": "danids.evaluation.thesis_assets:_figure_f4",
       "output_files": [
         {
-          "bytes": 71128,
+          "bytes": 71335,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F04_adaptation_tradeoff.svg",
-          "sha256": "5304a49be96381423cedafaaeff42f6cd608fe0bcdddd6586f1eaa1af57eecd5"
+          "sha256": "9fa418851a0ec38a864b1094cdc36e8a5d1a093a61ac4b3d623e4c5ea10c99fd"
         },
         {
-          "bytes": 28430,
+          "bytes": 28450,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F04_adaptation_tradeoff.pdf",
-          "sha256": "fe95836cfb1e7edec6d44b98785c679f844b389b5c4325e812a10bc77a1ea899"
+          "sha256": "4a78bf3ea251ff5cd2357f61c71f91b4f1b57bee8b763b924a76e34db48b3f50"
         },
         {
-          "bytes": 273179,
+          "bytes": 278433,
+          "hash_mode": "raw-bytes",
           "path": "png/F04_adaptation_tradeoff.png",
-          "sha256": "740641674f1b26ef29caa1258b6063044afda2460c70883369b93a60fa44cd5a"
+          "sha256": "aaca142987f211ec65bbc5122cc794bb2b329dc9b3bc36ef0cb8df7e6fd0db6d"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study2/u-t-c-b-s42-s44/study2_method_summary.csv",
-          "sha256": "37bfa21edd92d9407499755b57c752533ddc1d9558eb38dafc02540c29741d9d"
+          "sha256": "b58e2640fb34014374a98d62cd601c92659fbd39beb99b92545a7ccff8c1328b"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study2/u-t-c-b-s42-s44/study2_forgetting.csv",
-          "sha256": "11c53aa12f70bb66634c50e3d9a62babe873ea7ae4a6a753af1ece9a6a418a5e"
+          "sha256": "fd9e3da241fc933b3932a9360f156475a63751a08b67fb8bce5c859864a59e43"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study2/u-t-c-b-s42-s44/study2_final_holdouts.csv",
-          "sha256": "325cb417d87b63b9134f623ec7d23c486778a747d1e7b4acd94b4bacca6d9d97"
+          "sha256": "7222eb37468deb785da0ca1cda539bcf7b426e3bb39ba5896a76c539d485142c"
         }
       ]
     },
@@ -151,36 +199,43 @@
       "output_files": [
         {
           "bytes": 47388,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F05_model_health.svg",
           "sha256": "b70094f7fb4ee2161521fd5952f4fb406ceaeee8c67637a68f1169ad18c5d24e"
         },
         {
           "bytes": 22855,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F05_model_health.pdf",
           "sha256": "a2039d19eb0283dc32ba8d628230898630fc81da60f6abf09ae1e8604406154a"
         },
         {
           "bytes": 392973,
+          "hash_mode": "raw-bytes",
           "path": "png/F05_model_health.png",
           "sha256": "968f4c398f3138dfe3cdd956ea334d47ef07c4949d288dca2b9f8d1231ee4084"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study3/health-s42-s44/study3_state_prevalence.csv",
-          "sha256": "71bc19571009a13cf962555d755dd1393bdb9cd02f2bd3a852e8b382b3e49a45"
+          "sha256": "36f0397a0c48be850b5c5ea9a22d93a36645dadfbed70670675793aaac716126"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study3/health-s42-s44/study3_model_summary.csv",
-          "sha256": "956b03f79a8c61d45e311b9b73958336c5153880d04f75520002db557f56bfde"
+          "sha256": "6866f68d5fea6d66fbb72bc7188fb24335997da58c3a688eedfd5b5cde26f1da"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study3/health-s42-s44/study3_shift_harm_correlations.csv",
-          "sha256": "9d3f10f8ffc0b163337dd2868a10548853c23e896342d9a1d36b7c83c18447d9"
+          "sha256": "370742d6d3e2be8fa7f4b99b46e613fcd555a5f6bc79087dafdbd9ee4792208e"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study3/health-s42-s44/study3_summary.json",
-          "sha256": "975bcb6fded4a67d0bb350184494db58b2652e04e1a3844cdc16d2b6e8f93c1c"
+          "sha256": "c3e899041d4bc365d6edf7f5358cdd909a08e05f43445151501975093f468c61"
         }
       ]
     },
@@ -193,28 +248,38 @@
       "output_files": [
         {
           "bytes": 14784,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F06_core_state_machine.svg",
           "sha256": "51cc33202974d6912e023d39e5aafc6e4b62ab68c18c0cbbd91f2d9395789e19"
         },
         {
           "bytes": 23627,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F06_core_state_machine.pdf",
           "sha256": "a4b5871679656f3a753eb3cde638ea0d4106cafa70505f3940d30f95ec62195e"
         },
         {
           "bytes": 262742,
+          "hash_mode": "raw-bytes",
           "path": "png/F06_core_state_machine.png",
           "sha256": "aff4b177055f47b86903129c4469eb2c3502a1ebd024aca846e104cb9d1ece62"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_evidence_freeze.md",
-          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/decisions.md",
-          "sha256": "f5590796256c70fb39b261e801dc99ca376d180998676334d4f6c870933dad1a"
+          "sha256": "031198fd5be7f1afc930672488493d4467da6d59f1180cea6c43291f4d30bdd6"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study4/e4-confirmatory-final/evaluation_contract.json",
+          "sha256": "f6bef930198e022b4fd9bbe56ee6526b9abfdd912a9c5c7ed98cf9fe812c36ee"
         }
       ]
     },
@@ -227,38 +292,46 @@
       "output_files": [
         {
           "bytes": 99720,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F07_study4_safety_resource.svg",
           "sha256": "9a0dbf2abaefd7672aa39c8fcd4aad29a2f52d74815276263f7df9b276476e7e"
         },
         {
           "bytes": 32091,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F07_study4_safety_resource.pdf",
           "sha256": "7c722f988f924c3e519cab0bd86f2baea79c5ac2dd7e29eadf71ffeea3bf9777"
         },
         {
           "bytes": 357522,
+          "hash_mode": "raw-bytes",
           "path": "png/F07_study4_safety_resource.png",
           "sha256": "aa4f2bbe4ff95bfeeebcb802f73c6b03649e92c059bb46b76efdab7d87d57d24"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-final/study4_safety_compliance.csv",
-          "sha256": "82a0a4816698c70c5d3584469577326c25f2a1f1afb8c392f462981ab3324d48"
+          "sha256": "ed31113d888ef4b6b8dd0b90f258de9d2f1a7f2813aa821ffd1b50cfe6e5bd42"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-final/study4_label_query_usage.csv",
-          "sha256": "75abc36569643b654bfb391449008f0042dc3a5e91bfc0cce5a75bc704dcd955"
+          "sha256": "e19c08fc60424e48ba71dceaa706c777a27eb7c5a2a32aff9f8b22cc83317db2"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-final/study4_action_distribution.csv",
-          "sha256": "f386a79518075afd3fb655ec75a3c20fcb9788e133ad16d695256fd536f27e4a"
+          "sha256": "3cdb5121f01806213a2596157813ce8377e0ee6dd99168d80e16df5cc35cc2d4"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-final/study4_core_vs_always_paired.csv",
-          "sha256": "d262102f16f58259955e85307aaea745808d8a4c42757b7a7951e2ac68d71782"
+          "sha256": "be38279c2df97eda8297379dd349698ed1e73d3c664adc77fa4ca9bcc82de780"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-analysis/study4_confirmatory_results.json",
           "sha256": "53948a496fe2f7f04be56400a353f6e14857efb90c6dd56bc760d0e722ce8665"
         }
@@ -273,36 +346,43 @@
       "output_files": [
         {
           "bytes": 36300,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F08_family_failure.svg",
           "sha256": "64a69ddcfd4ca1c92de1049a704b11abe3b55c2085c19c68eb34b6b8835569d7"
         },
         {
           "bytes": 17032,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F08_family_failure.pdf",
           "sha256": "62be7bebed49821254e6616bab6f73ca11850587bcb27fce0dba940c461422cf"
         },
         {
           "bytes": 266048,
+          "hash_mode": "raw-bytes",
           "path": "png/F08_family_failure.png",
           "sha256": "e6a2eb7b8ec57443da8d07674efe9733474bc3150e56064d6097cfa0b81d7d80"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/threat-audit-v1/hidden_family_failures.csv",
           "sha256": "05cc12e71eee1a8a34d26c25c2e3196d3bae7ee9340c8a336a7057934dc1181e"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/threat-audit-v1/family_forgetting.csv",
           "sha256": "badca7e26fbae2aca7f0277025662c44c3b4244da1621cc3ef9b103772d48e2a"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/threat-audit-v1/study1_supported_transfer.csv",
           "sha256": "b663c4368a31d052af7af1f06ca9a5653a050264704da2609e8c1e74928520bc"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/threat-audit-v1/study5_contract.json",
-          "sha256": "34ec6e24f73acd3aeb241a8bd3d590ce3b8a8c388dd508de543a9ec6b8e996db"
+          "sha256": "2505d5b166bb6ee45b31a60b56c62ba8d50fed176307e482d51abe36c8723eed"
         }
       ]
     },
@@ -315,32 +395,38 @@
       "output_files": [
         {
           "bytes": 29763,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F09_order_replay_effects.svg",
           "sha256": "c93d0d9fc3511fca5d73afc54a9a3f09788636790c30c9c358b1b7452e5488ba"
         },
         {
           "bytes": 22023,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F09_order_replay_effects.pdf",
           "sha256": "10407c581e49b544f9cee91e380702d77add8222a9323e11b8c22cf66e0e9246"
         },
         {
           "bytes": 137410,
+          "hash_mode": "raw-bytes",
           "path": "png/F09_order_replay_effects.png",
           "sha256": "0864838b0b0a6be5132c19ff403de4c7739a552e39ea966819314fb2d8c6cfd3"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/task009-study5b-all-order-replay-v1/order_summary.csv",
           "sha256": "b137a881a7a29ff5f74bdd239cea5d39d55c7ff6dce4ca6d6b89c3007b23c021"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/task009-study5b-all-order-replay-v1/method_dimension_summary.csv",
           "sha256": "696d87d358a86a08f2a8376b21d1ef3638fe06995716c537389df5910fb7398b"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/task009-study5b-all-order-replay-v1/all_order_synthesis_verdict.json",
-          "sha256": "3f50a28f3765a585bc9e24626675a81c783f70860ff56fbf5285dda50332a436"
+          "sha256": "ecccebd28fb27dac5ca35f64a0e50be995b2eb11b13f1651a6ea93e73bd27fa5"
         }
       ]
     },
@@ -353,28 +439,58 @@
       "output_files": [
         {
           "bytes": 7010,
+          "hash_mode": "canonical-lf-utf8",
           "path": "svg/F10_evidence_synthesis.svg",
           "sha256": "123e790cf5a34d421ef726b324fb72fc0fbae6b9b9cc9935c3a91e43960f3d83"
         },
         {
           "bytes": 15375,
+          "hash_mode": "raw-bytes",
           "path": "pdf/F10_evidence_synthesis.pdf",
           "sha256": "af1110d7354030a938e8fd2dd9b6cf8e4c916a124c544d2a06d9b46b8c4b4ec3"
         },
         {
           "bytes": 182663,
+          "hash_mode": "raw-bytes",
           "path": "png/F10_evidence_synthesis.png",
           "sha256": "416f3e6b0c00217f69bb64e56f75f12f1436b27d544d2a1b1acfb118d10b5719"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_evidence_freeze.md",
-          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
         },
         {
-          "path": "docs/thesis_master_plan.md",
-          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study1/static-s42-s44/study1_summary.json",
+          "sha256": "58ec788520fbddecab91bd56fd4438e1032b7130fe73987608cee19134eb5381"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study2/u-t-c-b-s42-s44/study2_summary.json",
+          "sha256": "bf73c5d6757772f8d7b7edd549cb57d5ef26082120dac80d766737c48b6e68c9"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study3/health-s42-s44/study3_summary.json",
+          "sha256": "c3e899041d4bc365d6edf7f5358cdd909a08e05f43445151501975093f468c61"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study4/e4-confirmatory-analysis/study4_confirmatory_results.json",
+          "sha256": "53948a496fe2f7f04be56400a353f6e14857efb90c6dd56bc760d0e722ce8665"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/threat-audit-v1/study5_summary.json",
+          "sha256": "64bbbaacb906e0fd930bdb8c186e83dafb935c947712cc848ac302f1fff24c38"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/task009-study5b-all-order-replay-v1/all_order_synthesis_verdict.json",
+          "sha256": "ecccebd28fb27dac5ca35f64a0e50be995b2eb11b13f1651a6ea93e73bd27fa5"
         }
       ]
     },
@@ -386,24 +502,28 @@
       "generator": "danids.evaluation.thesis_assets:_table_t1",
       "output_files": [
         {
-          "bytes": 1176,
+          "bytes": 4843,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T01_rq_hypothesis_map.csv",
-          "sha256": "d7657aef779705d347adb0a5411dcd61d33fc2d87cd4bca053c579a25fdb68da"
+          "sha256": "9fc69ea8c1c9f30102cdd46e992f80361d63a950433fa94e6968cfdf11621558"
         },
         {
-          "bytes": 1308,
+          "bytes": 4957,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T01_rq_hypothesis_map.md",
-          "sha256": "23af3d3c9aed97b3a1cc36cb735404d606e8f6c762008558e3580c0f6a92b73a"
+          "sha256": "8e4b870e5ff0245d9498e62f4d0db45ff65b370497a1ddd6bfd40530b9f851cf"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_evidence_freeze.md",
-          "sha256": "5efb3122444645393b6cddf58308615fd2683ce5a850fb96c02f699eac6af677"
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_master_plan.md",
-          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+          "sha256": "829b8aa5fbb7efb156eca23cd6b68ef0510e5a118fb19685cd721346cc4881be"
         }
       ]
     },
@@ -411,24 +531,37 @@
       "chapter": "Chapter 2",
       "display_id": "T2",
       "display_type": "table",
-      "frozen_takeaway": "Literature claims remain explicitly gated on verified citations.",
+      "frozen_takeaway": "Adjacent literature addresses parts of the pipeline, while the interfaces among shift, operational harm and constrained recoverability remain distinct.",
       "generator": "danids.evaluation.thesis_assets:_table_t2",
       "output_files": [
         {
-          "bytes": 812,
+          "bytes": 2904,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T02_literature_positioning.csv",
-          "sha256": "7a68d1935a4fc1e2c6d7717aed8ef52b770ac3150e558efa841ff35b50b561b0"
+          "sha256": "8e543710a46e74203bf55df7974f779b8a9f339ebe805f8e8efbee49a0903731"
         },
         {
-          "bytes": 952,
+          "bytes": 3018,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T02_literature_positioning.md",
-          "sha256": "42482349f73452b72c1a059a002c0d656e6cb2e7c0efdb24f71d29c5bac26d61"
+          "sha256": "a80e2330d0e400e9feffd7d0e4e297b342b0f2b9965a705bcd1c9e338cba88eb"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "docs/literature_t02_evidence.md",
+          "sha256": "444becbf84b307f966f5cbc5037c755490b52ec9ec3c8f662536f1eab7abc346"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "docs/thesis_evidence_freeze.md",
+          "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
           "path": "docs/thesis_master_plan.md",
-          "sha256": "645af246e6fc1a2b462ee814ec67cf53aa3e4ce4369b32b4d8fc55a77935d5e1"
+          "sha256": "829b8aa5fbb7efb156eca23cd6b68ef0510e5a118fb19685cd721346cc4881be"
         }
       ]
     },
@@ -440,40 +573,68 @@
       "generator": "danids.evaluation.thesis_assets:_table_t3",
       "output_files": [
         {
-          "bytes": 1327,
+          "bytes": 1519,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T03_study_design_crosswalk.csv",
-          "sha256": "49de5cc0b2c5ae54d8e487ccf16acf22a8904edfb33fc9489ff8c725a3d6f3d2"
+          "sha256": "cd34a20d4fe10889597cc4c57028679debb60ae06709822f835dfb168c90be87"
         },
         {
-          "bytes": 1541,
+          "bytes": 1731,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T03_study_design_crosswalk.md",
-          "sha256": "a6fbdad22c2ff957d2e6153f6ab91d701651471a60da1325b35bcad155d471c0"
+          "sha256": "9377a99215898a31cd9cca59769304e2342d0d84a704c75f0079236900067c01"
         }
       ],
       "source_artifacts": [
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study1/static-s42-s44/study1_summary.json",
-          "sha256": "179d9b8cd07f0d50de9ee6069a0627cc708c2cbc01c384c3fe2b13917b6cc80b"
+          "sha256": "58ec788520fbddecab91bd56fd4438e1032b7130fe73987608cee19134eb5381"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study2/u-t-c-b-s42-s44/study2_summary.json",
-          "sha256": "c887b28b3724e43fdb397c5050fae579a910151620f4eb690035dc5e1c62e117"
+          "sha256": "bf73c5d6757772f8d7b7edd549cb57d5ef26082120dac80d766737c48b6e68c9"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study3/health-s42-s44/study3_summary.json",
-          "sha256": "975bcb6fded4a67d0bb350184494db58b2652e04e1a3844cdc16d2b6e8f93c1c"
+          "sha256": "c3e899041d4bc365d6edf7f5358cdd909a08e05f43445151501975093f468c61"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study3/health-s42-s44/evaluation_contract.json",
+          "sha256": "bf651c228d2674eb0b46f322bda89edc86bdc74e2dc082b32084771f5ab7d767"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study4/e4-confirmatory-final/study4_summary.json",
           "sha256": "6c45c09bbed16baf7fb2386330442e5bb29f37edf0f3e8ef70710599bd4c2987"
         },
         {
-          "path": "study5/threat-audit-v1/study5_summary.json",
-          "sha256": "b3011816daa6b50d5e39031d937922039ad535e1cf092f8d2d447f590f6636c2"
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study4/e4-confirmatory-final/evaluation_contract.json",
+          "sha256": "f6bef930198e022b4fd9bbe56ee6526b9abfdd912a9c5c7ed98cf9fe812c36ee"
         },
         {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/threat-audit-v1/study5_summary.json",
+          "sha256": "64bbbaacb906e0fd930bdb8c186e83dafb935c947712cc848ac302f1fff24c38"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/threat-audit-v1/study5_contract.json",
+          "sha256": "2505d5b166bb6ee45b31a60b56c62ba8d50fed176307e482d51abe36c8723eed"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
           "path": "study5/task009-study5b-all-order-replay-v1/study5b_summary.json",
-          "sha256": "eaac990704729c98449ca522e6eedab0a01313a8e548895267d52223687b3b17"
+          "sha256": "312279c706a664a70dae9483aab4d680ba8c8385c61338068cf848f174c142ef"
+        },
+        {
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study5/task009-study5b-all-order-replay-v1/task009_contract.json",
+          "sha256": "479b302432515395503201c11252e843285a94668cf4065bf1c0eccabbb82fc2"
         }
       ]
     },
@@ -486,19 +647,22 @@
       "output_files": [
         {
           "bytes": 541,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T04_policy_qualification.csv",
           "sha256": "109a474997c8817dff4c6f354e8a5217dbb79802b94e7b5d2e67747ba5c340d4"
         },
         {
           "bytes": 627,
+          "hash_mode": "canonical-lf-utf8",
           "path": "tables/T04_policy_qualification.md",
           "sha256": "aa57cfcf8b20ec7a93f32e9e72cd644490d211c2411c7f38d292358e5f778589"
         }
       ],
       "source_artifacts": [
         {
-          "path": "study4/policy-qualification-v1/policy_qualification.json",
-          "sha256": "f8430dee78409c4c2276d10dc0fd8b812b76a2fef6ff06f0ff0e6b41f5e20698"
+          "hash_mode": "canonical-lf-utf8",
+          "path": "study4/policy-qualification-v1-final/policy_qualification.json",
+          "sha256": "32ccf944d273da6a3e030a3e8350160d2fd88c231df2922e676f524d8ff8545e"
         }
       ]
     }
@@ -557,9 +721,10 @@
   "scientific_processing": "frozen-artifact-only; no experiments, training, rescoring, or hypothesis recomputation",
   "supplementary_files": [
     {
-      "bytes": 7438,
+      "bytes": 8748,
+      "hash_mode": "canonical-lf-utf8",
       "path": "captions.md",
-      "sha256": "802ef0fae915cc27350aaafdafa1bc657720bbb59e11cc9336fef324fcf24f91"
+      "sha256": "b9a5b9a596873ea4b77ff20d8e4ea2113ef75ff7304b2c771d25b79699e0e53a"
     }
   ],
   "table_count": 4

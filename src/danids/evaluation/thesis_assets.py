@@ -12,7 +12,7 @@ import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,6 +34,26 @@ from danids.evaluation.thesis_style import (
 plt.switch_backend("Agg")
 
 ASSET_VERSION = "danids-thesis-assets-v1"
+GENERATION_COMMAND = "python -m danids generate-thesis-assets"
+SCIENTIFIC_PROCESSING = (
+    "frozen-artifact-only; no experiments, training, rescoring, or hypothesis recomputation"
+)
+_WORDING_GUARDRAIL_BANNED = (
+    "anticipatory early warning",
+    "core reduced labels",
+    "study 5a performs attribution",
+    "study 5a performs open-set",
+    "four-order h7 synthesis is wholly prospective",
+)
+_WORDING_GUARDRAIL_ALLOWED_NEGATIONS = ("not anticipatory early warning",)
+DIGEST_POLICY = {
+    "algorithm": "sha256",
+    "encoding": "lowercase hexadecimal",
+    "binary_input": "raw bytes",
+    "text_input": "UTF-8 bytes after CRLF and CR are canonicalised to LF",
+    "bytes_field": "length of the hash input after the selected hash mode",
+}
+TEXT_HASH_SUFFIXES = frozenset({".csv", ".json", ".md", ".svg", ".txt", ".yaml", ".yml"})
 FIGURE_STEMS = {
     "F1": "F01_danids_pipeline",
     "F2": "F02_protocol_information_boundary",
@@ -57,6 +77,7 @@ SOURCE_PATHS = {
     "freeze": "docs/thesis_evidence_freeze.md",
     "plan": "docs/thesis_master_plan.md",
     "decisions": "docs/decisions.md",
+    "literature_t02": "docs/literature_t02_evidence.md",
     "study1_seed": "study1/static-s42-s44/study1_seed_summary.csv",
     "study1_transfer": "study1/static-s42-s44/study1_transfer_long.csv",
     "study1_summary": "study1/static-s42-s44/study1_summary.json",
@@ -68,13 +89,15 @@ SOURCE_PATHS = {
     "study3_models": "study3/health-s42-s44/study3_model_summary.csv",
     "study3_correlations": "study3/health-s42-s44/study3_shift_harm_correlations.csv",
     "study3_summary": "study3/health-s42-s44/study3_summary.json",
+    "study3_contract": "study3/health-s42-s44/evaluation_contract.json",
     "study4_safety": "study4/e4-confirmatory-final/study4_safety_compliance.csv",
     "study4_labels": "study4/e4-confirmatory-final/study4_label_query_usage.csv",
     "study4_actions": "study4/e4-confirmatory-final/study4_action_distribution.csv",
     "study4_paired": "study4/e4-confirmatory-final/study4_core_vs_always_paired.csv",
     "study4_summary": "study4/e4-confirmatory-final/study4_summary.json",
+    "study4_contract": "study4/e4-confirmatory-final/evaluation_contract.json",
     "study4_results": "study4/e4-confirmatory-analysis/study4_confirmatory_results.json",
-    "policy_qualification": "study4/policy-qualification-v1/policy_qualification.json",
+    "policy_qualification": "study4/policy-qualification-v1-final/policy_qualification.json",
     "study5_hidden": "study5/threat-audit-v1/hidden_family_failures.csv",
     "study5_forgetting": "study5/threat-audit-v1/family_forgetting.csv",
     "study5_transfer": "study5/threat-audit-v1/study1_supported_transfer.csv",
@@ -84,6 +107,7 @@ SOURCE_PATHS = {
     "study5b_methods": "study5/task009-study5b-all-order-replay-v1/method_dimension_summary.csv",
     "study5b_verdict": "study5/task009-study5b-all-order-replay-v1/all_order_synthesis_verdict.json",
     "study5b_summary": "study5/task009-study5b-all-order-replay-v1/study5b_summary.json",
+    "study5b_contract": "study5/task009-study5b-all-order-replay-v1/task009_contract.json",
 }
 
 
@@ -107,12 +131,19 @@ DISPLAY_SPECS = {
     ),
     "T2": DisplaySpec(
         "Chapter 2",
-        ("plan",),
-        "Literature claims remain explicitly gated on verified citations.",
+        ("literature_t02", "freeze", "plan"),
+        "Adjacent literature addresses parts of the pipeline, while the interfaces among shift, operational harm and constrained recoverability remain distinct.",
     ),
     "F2": DisplaySpec(
         "Chapter 3",
-        ("freeze", "decisions"),
+        (
+            "freeze",
+            "decisions",
+            "study3_contract",
+            "study4_contract",
+            "study5_contract",
+            "study5b_contract",
+        ),
         "The prequential protocol separates policy-visible information from evaluator-only truth and permanent holdouts.",
     ),
     "T3": DisplaySpec(
@@ -121,9 +152,13 @@ DISPLAY_SPECS = {
             "study1_summary",
             "study2_summary",
             "study3_summary",
+            "study3_contract",
             "study4_summary",
+            "study4_contract",
             "study5_summary",
+            "study5_contract",
             "study5b_summary",
+            "study5b_contract",
         ),
         "Each study has an explicit unit, evidence phase, supervision contract and hypothesis role.",
     ),
@@ -144,7 +179,7 @@ DISPLAY_SPECS = {
     ),
     "F6": DisplaySpec(
         "Chapter 6",
-        ("freeze", "decisions"),
+        ("freeze", "decisions", "study4_contract"),
         "DANIDS-Core acts only on permitted health and released evidence, with audit-gated acceptance and exact rollback.",
     ),
     "F7": DisplaySpec(
@@ -169,14 +204,51 @@ DISPLAY_SPECS = {
     ),
     "F10": DisplaySpec(
         "Chapter 8",
-        ("freeze", "plan"),
+        (
+            "freeze",
+            "study1_summary",
+            "study2_summary",
+            "study3_summary",
+            "study4_results",
+            "study5_summary",
+            "study5b_verdict",
+        ),
         "Operational harm was easier to recognise than repair under the frozen B100/D1 and A0-A4 regime.",
     ),
 }
 
 
+def _hash_mode(path: Path) -> str:
+    return "canonical-lf-utf8" if path.suffix.lower() in TEXT_HASH_SUFFIXES else "raw-bytes"
+
+
+def _canonical_text_bytes(path: Path) -> bytes:
+    text = path.read_bytes().decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return text.encode("utf-8")
+
+
+def _digest_byte_count(path: Path) -> int:
+    if _hash_mode(path) == "canonical-lf-utf8":
+        return len(_canonical_text_bytes(path))
+    return path.stat().st_size
+
+
+def _wording_guardrail_violations(text: str) -> tuple[str, ...]:
+    """Return unsupported claims while preserving explicit frozen negations."""
+
+    screened = text.lower()
+    for allowed in _WORDING_GUARDRAIL_ALLOWED_NEGATIONS:
+        screened = screened.replace(allowed, "")
+    return tuple(phrase for phrase in _WORDING_GUARDRAIL_BANNED if phrase in screened)
+
+
 def _sha256(path: Path) -> str:
+    """Hash text canonically across platforms and binary artifacts byte-for-byte."""
+
     digest = hashlib.sha256()
+    if _hash_mode(path) == "canonical-lf-utf8":
+        digest.update(_canonical_text_bytes(path))
+        return digest.hexdigest()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
@@ -546,7 +618,11 @@ def _annotated_heatmap(
         for column in range(4):
             value = shown[row, column]
             text = "—" if np.isnan(value) else f"{value:.3g}"
-            mapped = image.norm(values[row, column]) if not np.isnan(values[row, column]) else 0
+            mapped = (
+                cast(float, image.norm(values[row, column]))
+                if not np.isnan(values[row, column])
+                else 0
+            )
             axis.text(
                 column,
                 row,
@@ -659,7 +735,10 @@ def _figure_f4(sources: dict[str, Path]) -> Figure:
             ha="right",
         )
         axis.set_ylim(-0.02, 1.02)
-        axis.set_title(f"{chr(65 + panel)}  Final {DOMAIN_LABELS[domain]} holdout")
+        axis.set_title(
+            f"{chr(65 + panel)}  Final {domain} holdout\n{DOMAIN_LABELS[domain]}",
+            fontsize=8.5,
+        )
         if panel == 0:
             axis.set_ylabel("Attack recall (TPR)")
         axis.grid(axis="y", color=PALETTE["light_grey"], linewidth=0.6)
@@ -1180,43 +1259,43 @@ def _table_t1() -> pd.DataFrame:
     rows = [
         (
             "RQ1",
-            "How does sequential domain deployment affect IDS performance?",
-            "Studies 1–2",
-            "H1; H4; H10",
+            "How severe and direction-dependent is intrusion-detection degradation across heterogeneous network domains, and what operational trade-offs arise when standard continual-learning methods adapt one evolving detector?",
+            "Studies 1, 2",
+            "H1",
             "Chapter 4",
-            "Shift is directional; scheduled repair was unreliable.",
+            "Static cross-domain degradation was substantial and asymmetric across recall, false-positive burden, and ranking performance. Straightforward adaptation did not solve the deployment problem: target-domain recall recovery could coexist with extreme false-positive burden or reduced earlier-domain competence, and threshold-free retention did not guarantee acceptable operation at the frozen threshold. Study 1's sequence positions are reporting positions, not causal order effects.",
         ),
         (
             "RQ2",
-            "Can observable health signals identify operating-envelope violations?",
+            "Which observable distributional and model-state signals can distinguish harmful operating-envelope violations from harmless domain change, and do combined or sparsely supervised health models generalise reliably?",
             "Study 3",
             "H2; H3; H9",
             "Chapter 5",
-            "Same-window harm screening recognised many violations, with false-alarm burden.",
+            "Many harmful windows were recognisable from permitted label-free observables, and the reviewed combined-unlabelled gradient-boosting model was the strongest label-free comparator selected for the frozen Core monitor. Distribution shift was not equivalent to harm, however, and neither combined signals nor sparse delayed labels dominated every simpler comparator across models, metrics, and grouped generalisation protocols. This is strong same-window harm screening, not anticipatory early warning.",
         ),
         (
             "RQ3",
-            "Can selective intervention restore safety with fewer resources?",
+            "Under the frozen B100/D1 supervision regime and A0--A4 action space, can health-aware selective adaptation maintain or restore operating-envelope safety while reducing supervision, accepted updates, and operational forgetting relative to unconditional adaptation?",
             "Study 4",
             "H4; H10",
             "Chapter 6",
-            "Core reduced accepted updates, not labels, and comparable safety was not supported.",
+            "No. Core reduced accepted update frequency relative to Always-Adapt, but did not reduce requested labels—the frozen label-usage artifact records equal requested-label totals—and did not maintain comparable operational safety. The descriptively favourable operational-forgetting component and fewer accepted updates did not rescue the no-supervision-reduction and failed comparable-safety components of H10. The scheduled Always-Adapt treatment was slightly worse than Static despite using 3,600 labels across its 12 runs, so unconditional adaptation did not restore aggregate safety. The non-deployable one-step Offline Oracle's sparse selected updates supported the minimum-intervention motivation, yet its approximately 19.06% compliance also showed that most observed harm was not recoverable under the frozen B100/D1 and A0--A4 regime. This does not establish that safe adaptation is impossible in general. DANIDS-Policy failed closed before fitting and was never deployed.",
         ),
         (
             "RQ4",
-            "How do threat families and deployment order shape retention?",
-            "Studies 5A–5B",
-            "H6; H7; H8",
+            "To what extent do aggregate binary metrics conceal family-specific detection failures across deployment histories, and what is the evidential boundary between family-conditioned detection, attack attribution, and open-set recognition?",
+            "Study 5A",
+            "H6; H8",
             "Chapter 7",
-            "Family support was sparse and replay benefit was not order-robust.",
+            "Aggregate binary recall could remain within the frozen loss tolerance while a physically supported family experienced a larger loss. The estimand is family-conditioned binary detection recall. No attribution predictions, structured embedding comparison, explicit UNKNOWN decision, or open-set experiment was performed, so H6 and H8 are not testable. The 27 hidden-family rows are repeated lifecycle/representation output rows, not 27 independent failures, and history-relative unseen status is not a real-world zero-day claim.",
         ),
         (
             "RQ5",
-            "What does DANIDS establish about recognition versus repair?",
-            "Synthesis",
-            "All frozen hypotheses",
-            "Chapter 8",
-            "Operational harm was easier to recognise than repair under the frozen regime.",
+            "Does replay-aware adaptation robustly reduce supported attack-family forgetting and improve final previous-domain competence across deployment orders relative to target-only full fine-tuning?",
+            "Studies 2, 5B",
+            "H7",
+            "Chapter 7",
+            "No order-robust replay advantage was found. Positive U-T-C-B replay competence effects had been observed before TASK-009; the three missing rotations were then frozen prospectively and failed to reproduce the benefit. B-U-T-C showed materially adverse replay effects. The conclusion is deployment-order heterogeneity and reversal, not merely a near-zero pooled effect. The final four-order synthesis mixes prior and prospective evidence. Its primary level is mapped semantic families with physical support n >= 50; only previous domains in positions 1--3 are eligible, while position 4 is excluded. Effects are aggregated unweighted from family to domain to rotation--seed, and rotation--seed units—not flows or family rows—are the experimental units.",
         ),
     ]
     ledger = "H1 SUPPORTED; H2 SUPPORTED; H3 NOT_SUPPORTED; H4 NOT_SUPPORTED; H6 NOT_TESTABLE; H7 NOT_SUPPORTED; H8 NOT_TESTABLE; H9 PARTIAL; H10 PARTIAL"
@@ -1243,25 +1322,53 @@ def _table_t1() -> pd.DataFrame:
 
 
 def _table_t2() -> pd.DataFrame:
-    rows = []
-    for area in (
-        "Cross-domain NIDS",
-        "Continual learning",
-        "Drift monitoring",
-        "Selective adaptation",
-        "Family/open-set evaluation",
-    ):
-        rows.append(
-            (
-                area,
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "CITATION_REQUIRED",
-                "Pending verified literature",
-            )
-        )
+    rows = [
+        (
+            "Cross-domain NIDS",
+            "Per-flow binary attack detection or attack-specific classification after a network or dataset change",
+            "Labeled source data; target or cross-network use ranges from held-out testing to unlabeled adaptation or labeled augmentation",
+            "Directional source-to-target corpus pair under a common flow-feature schema",
+            "Target F1 or related classification performance and degradation from a same-domain reference",
+            "Separating detected shift, fixed-threshold operational harm and sequential recoverability",
+            "Apruzzese et al. (2022); Layeghy & Portmann (2023); Layeghy et al. (2023)",
+        ),
+        (
+            "Continual learning",
+            "Current-task prediction while retaining earlier-task or domain competence in one evolving model",
+            "Sequential labels; optional stored exemplars, task identity or parameter-importance state",
+            "Task or domain stage by retained test set, summarized over a sequence",
+            "High current and final performance with low forgetting or favourable backward transfer",
+            "Label-free harm recognition and audited minimum intervention under hidden boundaries and delayed labels",
+            "Parisi et al. (2019); Kirkpatrick et al. (2017); Lopez-Paz & Ranzato (2017); Delgado et al. (2026)",
+        ),
+        (
+            "Drift monitoring",
+            "Distribution mismatch or change point, or rising labeled prediction error",
+            "Reference data or model plus current unlabeled features or scores; labels for direct error monitoring",
+            "Current sample or window versus a reference window, or a sequential error stream",
+            "Controlled shift or error alarms with low false alarms and detection delay",
+            "Whether same-window change is operationally harmful and safely repairable",
+            "Lu et al. (2019); Gama et al. (2004); Gretton et al. (2012); Rabanser et al. (2019)",
+        ),
+        (
+            "Selective adaptation",
+            "Whether, when and on which samples or batches a deployed model should adapt",
+            "Current unlabeled inputs, predictions, entropy or shift proxies; sometimes delayed performance feedback",
+            "Test sample or minibatch, stream step or detected-drift episode",
+            "Shifted-domain accuracy plus update cost, forgetting, stability or collapse avoidance",
+            "Health-conditioned A0-A4 choice under B100/D1 with audit-gated promotion or rollback",
+            "Horchulhack et al. (2022); Niu et al. (2022, 2023); Yoo et al. (2024)",
+        ),
+        (
+            "Family/open-set evaluation",
+            "Known-class attribution or explicit UNKNOWN rejection, distinct from binary detection sliced by true family",
+            "Flow features; held-out classes for open-set tests; evaluator-only true families for conditional recall",
+            "Flow or connection summarized per class or family within a physical evaluation slice",
+            "Per-class or macro metrics and known-versus-unknown rejection trade-offs, reported separately",
+            "DANIDS provides family-conditioned binary detection recall only, with no attribution or open-set output",
+            "Elmasry et al. (2019); Cruz et al. (2017); Baye et al. (2023); Yu et al. (2024)",
+        ),
+    ]
     return pd.DataFrame(
         rows,
         columns=[
@@ -1335,7 +1442,7 @@ def _table_t3() -> pd.DataFrame:
             "physically supported family slice",
             "No new supervision",
             "Evaluator-only audit",
-            "Prior artifact-only audit",
+            "Ontology and estimands frozen after Studies 1--4 existed but before artifact-only threat-effect analysis over the prior Study 1, 2, and 4 source bundles",
             "H6; H8",
         ),
         (
@@ -1347,7 +1454,7 @@ def _table_t3() -> pd.DataFrame:
             "rotation × seed",
             "B100/D1",
             "No policy controller",
-            "9 prior U-T-C-B runs + 27 prospective runs",
+            "9 prior U-T-C-B runs + 27 prospective missing-rotation runs; mixed prior/prospective four-order synthesis",
             "H7",
         ),
     ]
@@ -1399,13 +1506,17 @@ CAPTIONS = {
     ),
     "T1": "Research-question and hypothesis map. Hypothesis statuses reproduce the frozen ledger verbatim and are not re-estimated here.",
     "T2": (
-        "Literature-positioning framework. CITATION_REQUIRED cells are deliberate placeholders: no unverified reference or literature claim is introduced by this artifact-only generator."
+        "Verified literature-positioning matrix. Representative adjacent work is compared by prediction target, information regime, evaluation unit and success criterion. "
+        "The final column states the remaining interface question for DANIDS without claiming that the cited areas ignore deployment shift."
     ),
     "F2": (
         "Frozen prequential chronology and information boundary. Prediction and label-free health extraction precede truth observation; labels release one window later. "
         "Permanent holdouts and evaluator truth cannot enter Core, querying, training, calibration, replay, or audit."
     ),
-    "T3": "Study-design crosswalk. Study 5B explicitly combines nine prior U-T-C-B runs with 27 prospectively frozen missing-rotation runs.",
+    "T3": (
+        "Study-design crosswalk. Study 5A froze its ontology and estimands after Studies 1--4 existed but before artifact-only threat-effect analysis over the prior Study 1, 2, and 4 source bundles. "
+        "Study 5B combines nine prior U-T-C-B runs with 27 prospective missing-rotation runs in a mixed prior/prospective four-order synthesis."
+    ),
     "F3": (
         "Static cross-domain transfer. Cells show seed-mean attack recall and the operational false-positive budget ratio on a logarithmic colour scale. "
         "Directional transfer asymmetry is descriptive; no significance claim is implied."
@@ -1447,7 +1558,10 @@ CAPTIONS = {
 INTERPRETATION_NOTES = {
     "F1": "Do not collapse recognition, intervention and outcome into a single capability claim.",
     "T1": "H3 is NOT_SUPPORTED; H9 and H10 use the compact final status PARTIAL.",
-    "T2": "Replace placeholders only after external literature citations are independently verified.",
+    "T2": (
+        "Read the five areas as adjacent capabilities, not a novelty census. DANIDS uses same-window harm screening, "
+        "and its repair claims remain bounded to the frozen B100/D1 and A0-A4 regime."
+    ),
     "F2": "Evaluator-only truth is used for scoring, never deployed control.",
     "T3": "Units are study-level experimental units, not flows, windows or family rows treated as replicates.",
     "F3": "Do not infer symmetric transfer from a source-target pair.",
@@ -1468,7 +1582,7 @@ def _captions_markdown(sources: dict[str, Path], repo_root: Path) -> str:
         "",
         "Generated deterministically from frozen Study 1–5 artifacts. No experiment, rescoring, or new scientific analysis is performed.",
         "",
-        "Domain labels: U = UNSW-NB15; T = ToN-IoT; C = CICIDS2017; B = BoT-IoT.",
+        "Domain labels: U = NF-UNSW-NB15-v3; T = NF-ToN-IoT-v3; C = NF-CSE-CIC-IDS2018-v3; B = NF-BoT-IoT-v3.",
         "",
     ]
     for display_id in (*FIGURE_STEMS, *TABLE_STEMS):
@@ -1496,7 +1610,8 @@ def _output_record(path: Path, output_root: Path) -> dict[str, Any]:
     return {
         "path": path.relative_to(output_root).as_posix(),
         "sha256": _sha256(path),
-        "bytes": path.stat().st_size,
+        "hash_mode": _hash_mode(path),
+        "bytes": _digest_byte_count(path),
     }
 
 
@@ -1622,6 +1737,7 @@ def generate_thesis_assets(
                         {
                             "path": sources[key].relative_to(repo_root).as_posix(),
                             "sha256": source_hashes_before[key],
+                            "hash_mode": _hash_mode(sources[key]),
                         }
                         for key in spec.sources
                     ],
@@ -1643,6 +1759,7 @@ def generate_thesis_assets(
                     {
                         "path": sources[key].relative_to(repo_root).as_posix(),
                         "sha256": source_hashes_before[key],
+                        "hash_mode": _hash_mode(sources[key]),
                     }
                     for key in spec.sources
                 ],
@@ -1658,8 +1775,9 @@ def generate_thesis_assets(
         raise RuntimeError("a frozen source artifact changed during thesis asset generation")
     manifest: dict[str, Any] = {
         "artifact_version": ASSET_VERSION,
-        "generation_command": "python -m danids generate-thesis-assets",
-        "scientific_processing": "frozen-artifact-only; no experiments, training, rescoring, or hypothesis recomputation",
+        "digest_policy": DIGEST_POLICY,
+        "generation_command": GENERATION_COMMAND,
+        "scientific_processing": SCIENTIFIC_PROCESSING,
         "display_count": len(display_records),
         "figure_count": len(FIGURE_STEMS),
         "table_count": len(TABLE_STEMS),
@@ -1693,7 +1811,42 @@ def _validate_rendered_file(path: Path) -> None:
             raise ValueError(f"invalid SVG output: {path}")
 
 
-def verify_thesis_assets(repo_root: Path, output_root: Path | None = None) -> None:
+def _expected_output_paths(display_id: str) -> list[str]:
+    if display_id in FIGURE_STEMS:
+        stem = FIGURE_STEMS[display_id]
+        return [f"svg/{stem}.svg", f"pdf/{stem}.pdf", f"png/{stem}.png"]
+    stem = TABLE_STEMS[display_id]
+    return [f"tables/{stem}.csv", f"tables/{stem}.md"]
+
+
+def _validate_digest_metadata(record: dict[str, Any], *, include_bytes: bool) -> None:
+    relative = record.get("path")
+    digest = record.get("sha256")
+    if not isinstance(relative, str) or not relative:
+        raise ValueError("thesis asset manifest digest path is invalid")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or digest != digest.lower()
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError(f"thesis asset manifest SHA-256 is invalid: {relative}")
+    if record.get("hash_mode") != _hash_mode(Path(relative)):
+        raise ValueError(f"thesis asset manifest hash mode differs: {relative}")
+    if include_bytes and (
+        not isinstance(record.get("bytes"), int)
+        or isinstance(record.get("bytes"), bool)
+        or record["bytes"] < 0
+    ):
+        raise ValueError(f"thesis asset manifest byte count is invalid: {relative}")
+
+
+def verify_thesis_assets(
+    repo_root: Path,
+    output_root: Path | None = None,
+    *,
+    verify_sources: bool = True,
+) -> None:
     """Verify source/output digests, display roster, formats, and wording guardrails."""
 
     repo_root = repo_root.resolve()
@@ -1702,6 +1855,12 @@ def verify_thesis_assets(repo_root: Path, output_root: Path | None = None) -> No
     manifest = _load_json(manifest_path)
     if manifest.get("artifact_version") != ASSET_VERSION:
         raise ValueError("thesis asset manifest version differs")
+    if manifest.get("digest_policy") != DIGEST_POLICY:
+        raise ValueError("thesis asset manifest digest policy differs")
+    if manifest.get("generation_command") != GENERATION_COMMAND:
+        raise ValueError("thesis asset manifest generation command differs")
+    if manifest.get("scientific_processing") != SCIENTIFIC_PROCESSING:
+        raise ValueError("thesis asset manifest scientific-processing declaration differs")
     if (
         manifest.get("display_count") != 14
         or manifest.get("figure_count") != 10
@@ -1712,32 +1871,65 @@ def verify_thesis_assets(repo_root: Path, output_root: Path | None = None) -> No
     expected_ids = [*FIGURE_STEMS, *TABLE_STEMS]
     if actual_ids != expected_ids:
         raise ValueError("thesis display ordering or identities differ")
-    sources = _resolve_sources(repo_root)
-    if manifest.get("projection_checks") != _projection_checks(sources):
-        raise ValueError("thesis display projection checks differ")
+    sources: dict[str, Path] | None = None
+    if verify_sources:
+        sources = _resolve_sources(repo_root)
+        if manifest.get("projection_checks") != _projection_checks(sources):
+            raise ValueError("thesis display projection checks differ")
     for record in manifest["displays"]:
+        display_id = record["display_id"]
+        spec = DISPLAY_SPECS[display_id]
+        is_figure = display_id in FIGURE_STEMS
+        expected_metadata = {
+            "display_type": "figure" if is_figure else "table",
+            "chapter": spec.chapter,
+            "generator": (
+                f"danids.evaluation.thesis_assets:_figure_{display_id.lower()}"
+                if is_figure
+                else f"danids.evaluation.thesis_assets:_table_{display_id.lower()}"
+            ),
+            "frozen_takeaway": spec.takeaway,
+        }
+        if any(record.get(key) != value for key, value in expected_metadata.items()):
+            raise ValueError(f"thesis display metadata differs: {display_id}")
+        expected_sources = [SOURCE_PATHS[key] for key in spec.sources]
+        actual_sources = [source.get("path") for source in record["source_artifacts"]]
+        if actual_sources != expected_sources:
+            raise ValueError(f"thesis display source provenance differs: {display_id}")
+        expected_outputs = _expected_output_paths(display_id)
+        actual_outputs = [output.get("path") for output in record["output_files"]]
+        if actual_outputs != expected_outputs:
+            raise ValueError(f"thesis display output roster differs: {record['display_id']}")
         for source in record["source_artifacts"]:
-            path = repo_root / source["path"]
-            if not path.is_file() or _sha256(path) != source["sha256"]:
-                raise ValueError(f"frozen source digest differs: {path}")
+            _validate_digest_metadata(source, include_bytes=False)
+            if verify_sources:
+                path = repo_root / source["path"]
+                if not path.is_file() or _sha256(path) != source["sha256"]:
+                    raise ValueError(f"frozen source digest differs: {path}")
         for output in record["output_files"]:
+            _validate_digest_metadata(output, include_bytes=True)
             path = output_root / output["path"]
-            if not path.is_file() or _sha256(path) != output["sha256"]:
+            if (
+                not path.is_file()
+                or _sha256(path) != output["sha256"]
+                or _digest_byte_count(path) != output["bytes"]
+            ):
                 raise ValueError(f"generated output digest differs: {path}")
             _validate_rendered_file(path)
-    for output in manifest["supplementary_files"]:
+    supplementary = manifest["supplementary_files"]
+    if [output.get("path") for output in supplementary] != ["captions.md"]:
+        raise ValueError("thesis supplementary output roster differs")
+    for output in supplementary:
+        _validate_digest_metadata(output, include_bytes=True)
         path = output_root / output["path"]
-        if not path.is_file() or _sha256(path) != output["sha256"]:
+        if (
+            not path.is_file()
+            or _sha256(path) != output["sha256"]
+            or _digest_byte_count(path) != output["bytes"]
+        ):
             raise ValueError(f"supplementary output digest differs: {path}")
     text_paths = [output_root / "captions.md", *(output_root / "tables").glob("*.md")]
     text = "\n".join(path.read_text(encoding="utf-8").lower() for path in text_paths)
-    banned = (
-        "anticipatory early warning",
-        "core reduced labels",
-        "study 5a performs attribution",
-        "study 5a performs open-set",
-        "four-order h7 synthesis is wholly prospective",
-    )
-    found = [phrase for phrase in banned if phrase in text]
+    found = _wording_guardrail_violations(text)
     if found:
         raise ValueError("wording guardrail violated: " + ", ".join(found))

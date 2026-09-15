@@ -1,15 +1,16 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "danids-research"
-version = "0.1.0"
-description = "Leakage-safe sequential benchmark infrastructure for DANIDS"
+version = "2.0.0"
+description = "Deployment-aware sequential network intrusion detection research software"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "All rights reserved" }
-authors = [{ name = "DANIDS Research" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Gavin Sun" }]
 dependencies = [
   "matplotlib>=3.9,<4",
   "numpy>=1.26,<3",
@@ -36,7 +37,7 @@ danids = "danids.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-danids = ["py.typed"]
+danids = ["py.typed", "utils/frozen_evidence_authority.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"

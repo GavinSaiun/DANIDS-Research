@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dataset-free-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install DANIDS and development tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check installed dependencies
+        run: python -m pip check
+
+      - name: Check the command surface
+        run: python -m danids --help
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Type-check
+        shell: bash
+        run: |
+          set +e
+          mypy src 2>&1 | tee "${RUNNER_TEMP}/mypy-output.txt"
+          status=${PIPESTATUS[0]}
+          if (( status != 0 )); then
+            while IFS= read -r line; do
+              printf '::error title=mypy::%s\n' "$line"
+            done < "${RUNNER_TEMP}/mypy-output.txt"
+          fi
+          exit "$status"
+
+      - name: Run dataset-free test suite
+        run: pytest
+
+      - name: Check whitespace
+        run: git diff --check

@@ -25,10 +25,10 @@ PALETTE = {
 
 DOMAIN_ORDER = ("U", "T", "C", "B")
 DOMAIN_LABELS = {
-    "U": "UNSW-NB15",
-    "T": "ToN-IoT",
-    "C": "CICIDS2017",
-    "B": "BoT-IoT",
+    "U": "NF-UNSW-NB15-v3",
+    "T": "NF-ToN-IoT-v3",
+    "C": "NF-CSE-CIC-IDS2018-v3",
+    "B": "NF-BoT-IoT-v3",
 }
 METHOD_ORDER = ("STATIC", "NAIVE_FT", "EWC", "ER", "FT_MEM")
 METHOD_LABELS = {
