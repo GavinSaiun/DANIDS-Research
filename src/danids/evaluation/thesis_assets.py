@@ -12,7 +12,7 @@ import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -617,7 +617,11 @@ def _annotated_heatmap(
         for column in range(4):
             value = shown[row, column]
             text = "—" if np.isnan(value) else f"{value:.3g}"
-            mapped = image.norm(values[row, column]) if not np.isnan(values[row, column]) else 0
+            mapped = (
+                cast(float, image.norm(values[row, column]))
+                if not np.isnan(values[row, column])
+                else 0
+            )
             axis.text(
                 column,
                 row,
