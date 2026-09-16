@@ -24,6 +24,7 @@ configs/datasets.local.yaml
 /study3/
 /study4/
 /study5/
+/rdx/
 /logs/
 /schedules/
 /checkpoints/

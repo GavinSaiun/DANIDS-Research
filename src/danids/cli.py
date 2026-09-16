@@ -27,6 +27,7 @@ from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
 from danids.evaluation.policy_development import evaluate_policy_development
 from danids.evaluation.policy_qualification import evaluate_policy_qualification
+from danids.evaluation.rdx import evaluate_rdx_recoverability
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
@@ -364,6 +365,16 @@ def _evaluate_study4(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_rdx_recoverability(args: argparse.Namespace) -> int:
+    output = evaluate_rdx_recoverability(
+        args.study4_evaluation_root,
+        args.output_dir,
+    )
+    summary = json.loads((output / "rdx_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
 def _run_policy_development(args: argparse.Namespace) -> int:
     registry = DatasetRegistry.from_yaml(args.datasets_config)
     config = load_policy_development_config(args.experiment_config).with_runtime_seed(args.seed)
@@ -697,6 +708,14 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_study4_parser.add_argument("--allow-incomplete", action="store_true")
     evaluate_study4_parser.add_argument("--allow-smoke", action="store_true")
     evaluate_study4_parser.set_defaults(handler=_evaluate_study4)
+
+    evaluate_rdx = subparsers.add_parser(
+        "evaluate-rdx-recoverability",
+        help="derive the frozen artifact-only RDX recoverability diagnostics",
+    )
+    evaluate_rdx.add_argument("--study4-evaluation-root", required=True, type=Path)
+    evaluate_rdx.add_argument("--output-dir", required=True, type=Path)
+    evaluate_rdx.set_defaults(handler=_evaluate_rdx_recoverability)
 
     run_policy = subparsers.add_parser(
         "run-policy-development",
