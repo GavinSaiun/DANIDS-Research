@@ -42,6 +42,10 @@ from danids.experiments.policy_development import (
     PolicyDevelopmentSmokeLimits,
     run_policy_development,
 )
+from danids.experiments.rdx_training_evidence import (
+    RdxTrainingEvidencePreflightError,
+    build_rdx004_training_evidence_preflight,
+)
 from danids.experiments.static import (
     SmokeLimits,
     load_or_generate_static_manifests,
@@ -379,6 +383,18 @@ def _evaluate_rdx_recoverability(args: argparse.Namespace) -> int:
 def _analyze_rdx_recoverability(args: argparse.Namespace) -> int:
     output = analyze_rdx_recoverability(args.rdx_bundle_root, args.output_dir)
     summary = json.loads((output / "rdx_analysis_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _preflight_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    output = build_rdx004_training_evidence_preflight(
+        args.config,
+        args.output_dir,
+        study4_evaluation_root=args.study4_evaluation_root,
+        manifest_root=args.manifest_root,
+    )
+    summary = json.loads((output / "rdx004_preflight_summary.json").read_text(encoding="utf-8"))
     print(json.dumps({"output_directory": str(output), **summary}, indent=2))
     return 0
 
@@ -733,6 +749,16 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_rdx.add_argument("--output-dir", required=True, type=Path)
     analyze_rdx.set_defaults(handler=_analyze_rdx_recoverability)
 
+    preflight_rdx004 = subparsers.add_parser(
+        "preflight-rdx004-training-evidence",
+        help="construct and validate the artifact-only RDX-004 24-run preflight",
+    )
+    preflight_rdx004.add_argument("--config", required=True, type=Path)
+    preflight_rdx004.add_argument("--study4-evaluation-root", type=Path)
+    preflight_rdx004.add_argument("--manifest-root", type=Path)
+    preflight_rdx004.add_argument("--output-dir", required=True, type=Path)
+    preflight_rdx004.set_defaults(handler=_preflight_rdx004_training_evidence)
+
     run_policy = subparsers.add_parser(
         "run-policy-development",
         help="run one POLICY_DEVELOPMENT_V1 rotation/seed/roll-in unit",
@@ -886,6 +912,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (FileNotFoundError, OSError, TypeError, ValueError, Study5BLauncherError) as exc:
+    except (
+        FileNotFoundError,
+        OSError,
+        TypeError,
+        ValueError,
+        Study5BLauncherError,
+        RdxTrainingEvidencePreflightError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

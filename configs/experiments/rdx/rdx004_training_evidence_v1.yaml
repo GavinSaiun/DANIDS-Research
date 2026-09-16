@@ -1,0 +1,128 @@
+contract_version: rdx004-training-evidence-config-v1
+contract_sha256: 24eebd5993e37a2f8d408659c73d8a6f90e648d2710651a520536761552253a7
+task: RDX-005
+
+protocol:
+  path: docs/rdx_training_evidence_protocol.md
+  version: RDX-004 v1.0
+  sha256: 7178e2ecaf97dfcdd0f4b9590c8f59b451d584a2eda5462721fad33a646ad197
+
+implementation:
+  version: rdx005-training-evidence-v1
+  status: PREFLIGHT_IMPLEMENTATION_ONLY
+  execution_authorized: false
+
+matrix:
+  method: OFFLINE_ORACLE
+  historical_comparator: B100
+  prospective_budgets: [B400, B1600]
+  rotations:
+    - [U, T, C, B]
+    - [T, C, B, U]
+    - [C, B, U, T]
+    - [B, U, T, C]
+  seeds: [42, 43, 44]
+  expected_new_runs: 24
+  later_domains_per_run: 3
+  queries_per_later_domain: 4
+  expected_query_events_per_run: 12
+  expected_query_events: 288
+
+treatments:
+  B100:
+    evidence_status: HISTORICAL_CANONICAL_COMPARATOR
+    prospective_new_run: false
+    rerun_authorized: false
+    label_budget_per_scope: 100
+    queries_per_scope: 4
+    selected_per_query: 25
+    training_per_query: 20
+    audit_per_query: 5
+    maximum_selected_rows: 100
+    maximum_training_rows: 80
+    maximum_audit_rows: 20
+    delay_windows: 1
+  B400:
+    evidence_status: PROSPECTIVELY_FROZEN_NEW_TREATMENT
+    prospective_new_run: true
+    rerun_authorized: false
+    label_budget_per_scope: 400
+    queries_per_scope: 4
+    selected_per_query: 100
+    training_per_query: 95
+    audit_per_query: 5
+    maximum_selected_rows: 400
+    maximum_training_rows: 380
+    maximum_audit_rows: 20
+    delay_windows: 1
+  B1600:
+    evidence_status: PROSPECTIVELY_FROZEN_NEW_TREATMENT
+    prospective_new_run: true
+    rerun_authorized: false
+    label_budget_per_scope: 1600
+    queries_per_scope: 4
+    selected_per_query: 400
+    training_per_query: 395
+    audit_per_query: 5
+    maximum_selected_rows: 1600
+    maximum_training_rows: 1580
+    maximum_audit_rows: 20
+    delay_windows: 1
+
+selector:
+  wrapper_version: rdx004-nested-task006-ranking-v1
+  inherited_ranking_version: task006-sha256-label-blind-v1
+  prefix_sizes: [25, 100, 400]
+  output_ordering: CHRONOLOGICAL_PHYSICAL_POSITION
+  ranking_window_identity: LOCAL_SELECTION_WINDOW_ID
+  label_blind: true
+  prior_query_rows_ineligible: true
+  minimum_candidate_rows: 400
+
+audit_control:
+  source: CANONICAL_B100_PERSISTED_ALLOCATION
+  fixed_rows_per_query: 5
+  fixed_rows_per_scope: 20
+  recompute_allocation: false
+  current_scope_audit_training_eligible: false
+  activate_only_when_historical: true
+
+historical_replay:
+  capacity_per_previous_domain: 400
+  source_replay_capacity: 400
+  source_audit_capacity: 100
+  projection_primitive: deterministic_replay_exemplars
+  projection_version: rdx004-deterministic-binary-stratified-cap400-v1
+  projection_seed_offset: 10000
+  project_only_above_capacity: true
+  canonical_b100_provenance_preserved: true
+
+frozen_action_contract:
+  action_order: [A0_NO_OP, A1_RECALIBRATE, A2_HEAD_UPDATE, A3_FULL_FINE_TUNE, A4_REPLAY_UPDATE]
+  architecture: compact_mlp_256_128_64_dropout_0.2
+  preprocessor: initial-median-standard-v1
+  optimizer: AdamW
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  epochs: 20
+  batch_size: 64
+  a1_minimum_benign_support: 3838
+  a2_definition: HEAD_ONLY_TARGET_UPDATE
+  a3_definition: FULL_TARGET_ONLY_FINE_TUNE
+  a4_definition: FULL_TARGET_PLUS_HISTORICAL_REPLAY_UPDATE
+  target_fpr: 0.001
+  audit_rule: FROZEN_STUDY4_HISTORICAL_AUDIT_GUARD
+  recall_floor_semantics: FIXED_LEARNED_AUDIT_REFERENCE
+  model_clone_semantics: DEEP_COPY_IDENTICAL_INCOMING_STATE
+  r1_clone_semantics: BRANCH_COPY_ATOMIC_ACCEPT_OR_ROLLBACK
+  oracle_horizon: FIRST_FRESH_SAME_DOMAIN_SUCCESSOR
+  permanent_holdout_used_for_choice: false
+
+artifacts:
+  canonical_b100_authority: study4/e4-confirmatory-final/evaluation_contract.json
+  preflight_namespace: rdx/training-evidence-preflight-v1
+  execution_namespace: runs/rdx004-training-evidence-v1
+  run_id_template: RDX004_OFFLINE_ORACLE_{BUDGET}_{ROTATION}_s{SEED}
+  paired_b100_id_template: E4_OFFLINE_ORACLE_{ROTATION}_s{SEED}
+  preflight_write_once: true
+  execution_requires_explicit_opt_in: true

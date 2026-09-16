@@ -500,6 +500,59 @@ def _rank_digest(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def select_core_query_prefix(
+    positions: tuple[int, ...],
+    *,
+    seed: int,
+    opaque_scope_token: str,
+    window_id: int,
+    query_ordinal: int,
+    prefix_size: int,
+    current_digest: str | None = None,
+) -> tuple[int, ...]:
+    """Return a sorted prefix of the frozen label-blind Core ranking.
+
+    This pure helper exposes the already-frozen ranking principle without changing
+    the B100 ``CoreQuerySelection`` capability.  RDX-004 uses it to prove that its
+    25/100/400 prefixes are nested.  The RDX wrapper identity is deliberately not
+    part of the hash payload, so a 25-row prefix is byte-for-byte identical to the
+    original TASK-006 selection.
+    """
+
+    if type(seed) is not int:
+        raise TypeError("query seed must be an integer")
+    if not opaque_scope_token:
+        raise ValueError("query selection requires an opaque supervision-scope token")
+    if type(window_id) is not int or window_id < 0:
+        raise ValueError("query window ID must be a non-negative integer")
+    if type(query_ordinal) is not int or not 0 <= query_ordinal < 4:
+        raise ValueError("query ordinal must lie in [0, 3]")
+    if type(prefix_size) is not int or prefix_size <= 0:
+        raise ValueError("query prefix size must be a positive integer")
+    if tuple(sorted(set(positions))) != positions:
+        raise ValueError("query candidates must be chronological and distinct")
+    if prefix_size > len(positions):
+        raise ValueError("query prefix exceeds the eligible candidate population")
+    reconstructed_digest = row_positions_digest(positions)
+    if current_digest is not None and current_digest != reconstructed_digest:
+        raise ValueError("query candidate-population digest differs")
+    ranked = sorted(
+        (
+            _rank_digest(
+                seed=seed,
+                opaque_scope_token=opaque_scope_token,
+                window_id=window_id,
+                current_digest=reconstructed_digest,
+                query_ordinal=query_ordinal,
+                row_position=position,
+            ),
+            position,
+        )
+        for position in positions
+    )
+    return tuple(sorted(position for _, position in ranked[:prefix_size]))
+
+
 @lru_cache(maxsize=16)
 def _select_core_query_cached(
     positions: tuple[int, ...],
@@ -524,21 +577,15 @@ def _select_core_query_cached(
             selected_positions_digest=None,
             reason="fewer_than_25_current_window_rows",
         )
-    ranked = sorted(
-        (
-            _rank_digest(
-                seed=seed,
-                opaque_scope_token=opaque_scope_token,
-                window_id=window_id,
-                current_digest=current_digest,
-                query_ordinal=query_ordinal,
-                row_position=position,
-            ),
-            position,
-        )
-        for position in positions
+    selected = select_core_query_prefix(
+        positions,
+        seed=seed,
+        opaque_scope_token=opaque_scope_token,
+        window_id=window_id,
+        query_ordinal=query_ordinal,
+        prefix_size=CORE_QUERY_BATCH_SIZE,
+        current_digest=current_digest,
     )
-    selected = tuple(sorted(position for _, position in ranked[:CORE_QUERY_BATCH_SIZE]))
     return CoreQuerySelection(
         selector_version=CORE_QUERY_SELECTOR_VERSION,
         seed=seed,
@@ -638,6 +685,7 @@ __all__ = [
     "HistoricalScopeClosure",
     "QuerySelectionStatus",
     "select_core_query",
+    "select_core_query_prefix",
     "validate_core_query_selection",
     "write_core_query_log",
 ]
