@@ -1,0 +1,44 @@
+contract_version: rdx006-training-evidence-execution-config-v1
+contract_sha256: 2c928f4a35fb37481588f907905a5f0f83f1a15d510a00ff054e6eb326870221
+task: RDX-006
+
+implementation:
+  version: rdx006-training-evidence-execution-harness-v1
+  status: EXECUTION_HARNESS_AUTHORIZED
+  execution_authorized: true
+  explicit_execute_flag: --execute
+
+protocol:
+  path: docs/rdx_training_evidence_protocol.md
+  version: RDX-004 v1.0
+  sha256: 7178e2ecaf97dfcdd0f4b9590c8f59b451d584a2eda5462721fad33a646ad197
+
+preflight:
+  namespace: rdx/training-evidence-preflight-v1
+  required_bundle_digest: d9de30ace5ffd3607dbe6c88b7e75d8cded91e9a118a129423b6969d792513eb
+  required_verdict: GO
+
+matrix:
+  method: OFFLINE_ORACLE
+  prospective_budgets:
+    - B400
+    - B1600
+  rotations:
+    - [U, T, C, B]
+    - [T, C, B, U]
+    - [C, B, U, T]
+    - [B, U, T, C]
+  seeds: [42, 43, 44]
+  b100_execution_authorized: false
+
+identity:
+  full_run_id_template: RDX004_OFFLINE_ORACLE_{BUDGET}_{ROTATION}_s{SEED}
+  paired_b100_id_template: E4_OFFLINE_ORACLE_{ROTATION}_s{SEED}
+  paired_study1_id_template: E1_STATIC_MLP_{ROTATION}_s{SEED}
+
+artifacts:
+  confirmatory_namespace: runs/rdx004-training-evidence-v1
+  smoke_namespace: runs/rdx004-training-evidence-smoke-v1
+  smoke_run_id_template: RDX004_SMOKE_OFFLINE_ORACLE_{BUDGET}_{ROTATION}_s{SEED}
+  smoke_marker: SMOKE
+  smoke_scientific_admissible: false

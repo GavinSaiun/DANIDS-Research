@@ -19,6 +19,8 @@ from danids.config.core import load_study4_core_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
 from danids.config.health import load_health_experiment_config
 from danids.config.policy_development import load_policy_development_config
+from danids.config.rdx_training_evidence import RDX004_ROTATIONS, RDX004Budget
+from danids.config.rdx_training_execution import load_rdx006_execution_config
 from danids.config.static import load_static_experiment_config
 from danids.config.study4 import load_study4_execution_config
 from danids.continual.supervision import load_or_create_supervision_schedule
@@ -399,6 +401,37 @@ def _preflight_rdx004_training_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    if args.execute is not True:
+        raise ValueError("RDX-004 execution requires explicit --execute")
+    rotation = tuple(args.rotation)
+    if rotation not in RDX004_ROTATIONS:
+        raise ValueError("RDX-004 rotation must be one exact frozen rotation")
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_rdx006_execution_config(args.execution_config)
+
+    # Keep the execution implementation out of the artifact-only preflight
+    # import path.  The runner independently repeats every authorization and
+    # provenance check before it can materialize a run.
+    from danids.experiments.rdx_training_execution import run_rdx004_training_evidence
+
+    output = run_rdx004_training_evidence(
+        registry,
+        config,
+        budget=args.budget,
+        rotation=rotation,
+        seed=args.seed,
+        preflight_dir=args.preflight_dir,
+        manifest_dir=args.manifest_dir,
+        output_root=args.output_root,
+        device_name=args.device,
+        smoke=args.smoke,
+        execute=args.execute,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
+    return 0
+
+
 def _run_policy_development(args: argparse.Namespace) -> int:
     registry = DatasetRegistry.from_yaml(args.datasets_config)
     config = load_policy_development_config(args.experiment_config).with_runtime_seed(args.seed)
@@ -758,6 +791,39 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_rdx004.add_argument("--manifest-root", type=Path)
     preflight_rdx004.add_argument("--output-dir", required=True, type=Path)
     preflight_rdx004.set_defaults(handler=_preflight_rdx004_training_evidence)
+
+    run_rdx004 = subparsers.add_parser(
+        "run-rdx004-training-evidence",
+        help="explicitly execute one authorized RDX-004 B400/B1600 run",
+    )
+    run_rdx004.add_argument("--execution-config", required=True, type=Path)
+    run_rdx004.add_argument("--datasets-config", required=True, type=Path)
+    run_rdx004.add_argument("--preflight-dir", required=True, type=Path)
+    run_rdx004.add_argument(
+        "--budget",
+        required=True,
+        type=RDX004Budget,
+        choices=[RDX004Budget.B400, RDX004Budget.B1600],
+    )
+    run_rdx004.add_argument(
+        "--rotation",
+        required=True,
+        nargs=4,
+        choices=["U", "T", "C", "B"],
+        metavar=("D1", "D2", "D3", "D4"),
+    )
+    run_rdx004.add_argument("--seed", required=True, type=int, choices=[42, 43, 44])
+    run_rdx004.add_argument("--manifest-dir", required=True, type=Path)
+    run_rdx004.add_argument(
+        "--output-root",
+        required=True,
+        type=Path,
+        help="repository/output root; the frozen confirmatory or smoke namespace is appended",
+    )
+    run_rdx004.add_argument("--device", default="auto")
+    run_rdx004.add_argument("--smoke", action="store_true")
+    run_rdx004.add_argument("--execute", action="store_true")
+    run_rdx004.set_defaults(handler=_run_rdx004_training_evidence)
 
     run_policy = subparsers.add_parser(
         "run-policy-development",
