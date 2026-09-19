@@ -5,6 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Software version](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
 
+### [Open DANIDS Explorer →](https://gavinsaiun.github.io/DANIDS-Research/)
+
+Interactive, read-only exploration of the frozen DANIDS 2.0 and post-freeze RDX evidence.
+
+<img width="2880" height="1800" alt="gavinsaiun github io-DANIDS-Research" src="https://github.com/user-attachments/assets/30912b7e-72d2-41f9-a500-fec852665a4e" />
+
 > **Research status:** DANIDS 2.0 Studies 1--5 were frozen on 15 September 2026.
 > The separately versioned, post-freeze Recoverability Diagnostic Extension (RDX) was
 > subsequently completed and frozen. RDX does not alter the original hypothesis ledger;
