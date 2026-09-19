@@ -45,10 +45,8 @@ remain censored rather than being counted as failures.
 
 ## Offline-Oracle recoverability
 
-The non-deployable Offline Oracle supplied a one-step upper-bound diagnostic under the
-same frozen operational constraints. Among 7,776 eligible decisions whose current
-evaluator state was HARMFUL, only nine had any confirmed one-step success among A0--A4
-(approximately 0.12%). Oracle used current truth, complete counterfactual audit outcomes,
+The non-deployable Offline Oracle supplied a one-step capability comparator under the same frozen operational constraints.
+Among 7,776 eligible decisions whose current evaluator state was HARMFUL, only nine had any confirmed one-step success among A0--A4 (approximately 0.12%). Oracle used current truth, complete counterfactual audit outcomes,
 and the first fresh same-domain successor for action choice; it did not use permanent
 holdouts or later trajectory information. This is a bounded one-step capability result,
 not a claim about unconstrained or long-horizon recoverability.
