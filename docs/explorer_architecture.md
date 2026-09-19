@@ -60,4 +60,4 @@ Dataset-free Python tests cover source pinning, deterministic output, exact sche
 source immutability, output collision refusal, and clean-clone behavior. Frontend tests
 cover runtime schemas/hashes, route rendering, source labels and display interactions.
 CI checks projection freshness, TypeScript, frontend tests and production build.
-This pass does not deploy, commit, push, or open a PR.
+Deployment is configured separately from the Explorer implementation and evidence contract.
