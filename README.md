@@ -1,8 +1,14 @@
 # DANIDS Research
 
-> **Final research status (15 September 2026):** the empirical programme is frozen
-> after Study 5B. Studies 1--5 are complete; Study 6 external validation was not
-> performed and is future work.
+[![CI](https://github.com/GavinSaiun/DANIDS-Research/actions/workflows/ci.yml/badge.svg)](https://github.com/GavinSaiun/DANIDS-Research/actions/workflows/ci.yml)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Software version](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
+
+> **Research status:** DANIDS 2.0 Studies 1--5 were frozen on 15 September 2026.
+> The separately versioned, post-freeze Recoverability Diagnostic Extension (RDX) was
+> subsequently completed and frozen. RDX does not alter the original hypothesis ledger;
+> Study 6 external validation was not performed and remains future work.
 
 Research code, frozen evidence, and thesis displays for **DANIDS: Deployment-Aware
 Network Intrusion Detection under Sequential Cross-Domain Shift**.
@@ -94,6 +100,25 @@ reintroduced.
   family-conditioned binary detection recall, not attribution or open-set recognition.
 - Replay effects varied and reversed by deployment order. The final H7 synthesis mixes
   prior U-T-C-B evidence with a prospective three-rotation extension.
+
+## Post-freeze Recoverability Diagnostic Extension
+
+RDX is a separately versioned diagnostic extension completed after the Studies 1--5
+freeze. It is neither Study 6 nor part of the original Study-4 confirmatory design, and
+it does not retroactively modify H1--H10. See [RDX_RESULTS.md](RDX_RESULTS.md) for the
+full bounded result and provenance.
+
+The training-evidence sensitivity compared 80, 380, and 1,580 optimizer-eligible target
+rows at B100, B400, and B1600 respectively. Median P1 and P2 remained 0% at all three
+budgets. B400 and B1600 produced only small mean increases, and positive rotation-level
+effects occurred in 1/4 rotations. The prospectively frozen decision was
+`TRAINING_EVIDENCE_INCREASE_NOT_MATERIALLY_RECOVERABILITY_EXPANDING`.
+
+> B100 training scarcity alone was insufficient to explain the observed recovery ceiling
+> under the frozen compact model and A0--A4 intervention family.
+
+This bounded result does not show that more data can never help or that safe adaptation
+is impossible generally.
 
 ## Scope and non-claims
 
@@ -218,7 +243,8 @@ stale nested-manifest content is rejected before publication.
 
 ## Documentation map
 
-- [Results guide](THESIS_RESULTS.md) -- six-study navigation and bounded conclusions
+- [Results guide](THESIS_RESULTS.md) -- frozen Studies 1--5 navigation and conclusions
+- [RDX results](RDX_RESULTS.md) -- separately versioned post-freeze diagnostics
 - [Reproducibility guide](REPRODUCIBILITY.md) -- environments, data, provenance, and reruns
 - [Evidence freeze](docs/thesis_evidence_freeze.md) -- final scientific result boundary
 - [Research specification](docs/research_specification.md) -- historical methodological source

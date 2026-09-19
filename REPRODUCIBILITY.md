@@ -14,7 +14,9 @@ workspace at the paths in [THESIS_RESULTS.md](THESIS_RESULTS.md), but a clean cl
 the future evidence archive before artifact-backed checks can run.
 
 The empirical programme is frozen after Study 5B. Study 6 external CICIoT2023 validation
-was not performed and is not a reproduction target.
+was not performed and is not a reproduction target. The post-freeze RDX evidence is a
+separately versioned package: it is not part of the DANIDS 2.0 Studies 1--5 frozen archive
+and does not alter that programme's hypothesis ledger.
 
 ## 1. Record the source checkout
 
@@ -219,7 +221,65 @@ The generator produces 10 figures, four tables, captions, and a manifest from fr
 artifacts only. It performs no raw-data access, training, rescoring, or hypothesis
 recomputation.
 
-## 7. Expensive Study 1--5 dependency graph
+## 7. Post-freeze RDX reproduction and validation
+
+The RDX protocols are
+[`docs/rdx_protocol.md`](docs/rdx_protocol.md) and
+[`docs/rdx_training_evidence_protocol.md`](docs/rdx_training_evidence_protocol.md).
+RDX-007 is artifact-only: it validates and analyzes completed RDX bundles without raw-
+data access, model training, rescoring, or mutation of any source artifact.
+
+The frozen local namespaces are:
+
+| Evidence role | Ignored namespace |
+|---|---|
+| RDX-A--D diagnostic derivation | `rdx/recoverability-diagnostics-v1/` |
+| RDX-A--D analysis | `rdx/recoverability-analysis-v1/` |
+| RDX-004 full-matrix preflight | `rdx/training-evidence-preflight-v1/` |
+| RDX-004 prospective B400/B1600 runs | `runs/rdx004-training-evidence-v1/` |
+| RDX-007 training-evidence analysis | `rdx/training-evidence-analysis-v1/` |
+
+The RDX-007 corpus contains 12 immutable historical B100 runs and 24 prospective runs
+(B400 and B1600 across four rotations and seeds 42--44). The complete three-arm analysis
+is therefore mixed historical/prospective evidence, not wholly prospective. Restore the
+exact separately distributed RDX evidence package before running the following command;
+none of these ignored directories is present in a clean Git clone.
+
+The exact frozen RDX-007 invocation used the canonical analysis namespace:
+
+```powershell
+python -m danids analyze-rdx004-training-evidence `
+  --study4-evaluation-dir study4/e4-confirmatory-final `
+  --preflight-dir rdx/training-evidence-preflight-v1 `
+  --run-root runs/rdx004-training-evidence-v1 `
+  --output-dir rdx/training-evidence-analysis-v1
+```
+
+Do not rerun that command into an existing canonical directory. For an independent
+reproduction, use the same inputs and a new empty output directory:
+
+```powershell
+$rdxAnalysisOut = Join-Path ([System.IO.Path]::GetTempPath()) `
+  ("danids-rdx007-" + [guid]::NewGuid())
+python -m danids analyze-rdx004-training-evidence `
+  --study4-evaluation-dir study4/e4-confirmatory-final `
+  --preflight-dir rdx/training-evidence-preflight-v1 `
+  --run-root runs/rdx004-training-evidence-v1 `
+  --output-dir $rdxAnalysisOut
+```
+
+The validated canonical analysis has bundle digest
+`c28ef8a5b73db863ec18be0c3f21110defde34967623214268e169312362fbc7` and
+analysis-contract SHA-256
+`8a9ee12ad626014b3903c9c34f8117fb01ebabcf60808b0de507bd5fadfac8a8`.
+See [RDX_RESULTS.md](RDX_RESULTS.md) for the bounded result and evidence-timing
+interpretation.
+
+The DANIDS 2.0 Study 1--5 frozen archive and the RDX evidence are separate evidence
+packages. Do not insert RDX artifacts into the original archive, infer RDX availability
+from a successful source checkout, or substitute smoke outputs for the frozen corpus.
+
+## 8. Expensive Study 1--5 dependency graph
 
 ```text
 four raw NetFlow-v3 CSVs
@@ -263,7 +323,7 @@ its confirmatory matrix. Study 5A is an artifact-only audit and does not reopen 
 or rescore models. Study 5B combines the prior U-T-C-B evidence with the prospectively
 frozen missing-rotation runs.
 
-## 8. Determinism and comparison standard
+## 9. Determinism and comparison standard
 
 The final learning seeds are exactly `42`, `43`, and `44`. Configurations, dataset
 digests, chronological row ranges, source checkpoints, thresholds, label schedules,
@@ -282,7 +342,7 @@ deterministic reconstruction from identical source bytes. Where a manifest speci
 SHA-256, byte identity is the standard. FT-Mem is explicitly a DANIDS-compatible
 deterministic baseline, not a claim of byte-identical reproduction of another codebase.
 
-## 9. Write-once and restart rules
+## 10. Write-once and restart rules
 
 Runs, aggregations, policy artifacts, Study-5 outputs, thesis projections, and evidence
 archives use new output locations and refuse unsafe overwrite. Preserve failed or
@@ -296,7 +356,7 @@ unchanged schedule. Optimizer state is never resumed. See
 [`docs/study5_replay_retention.md`](docs/study5_replay_retention.md) for the exact launch
 and quarantine command.
 
-## 10. Scientific invariants
+## 11. Scientific invariants
 
 Every reproduction must preserve:
 
@@ -313,7 +373,7 @@ Every reproduction must preserve:
 - no flows, windows, repeated family rows, or repeated views promoted to experimental
   replicates.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 - **`conda` is not found:** use the standard Python 3.11 virtual-environment route, or
   initialise Conda for the current shell before activating `danids`.
@@ -336,10 +396,10 @@ Every reproduction must preserve:
   environment, line-ending policy, and that the output directory was initially empty.
   A digest mismatch is a failed integrity check, not a cosmetic warning.
 
-## 12. Release archive, tag, and citation
+## 13. Release archive, tag, and citation
 
 At public release, record the immutable archive URL/DOI and release tag here, replace
 `TO_BE_PUBLISHED_AT_RELEASE`, and add the verified identifier/date to `CITATION.cff`.
 Do not invent them in advance. `CITATION.cff` currently identifies software version
-2.0.0 and the verified Git author/repository metadata; it deliberately has no release
+2.1.0 and the verified Git author/repository metadata; it deliberately has no release
 date or DOI.

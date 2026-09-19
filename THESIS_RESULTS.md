@@ -114,13 +114,31 @@ order heterogeneity and reversal, not that replay is always harmful.
 Displays: [F9 order and replay effects](thesis/assets/png/F09_order_replay_effects.png)
 and [T3 study-design crosswalk](thesis/assets/tables/T03_study_design_crosswalk.md).
 
+## Post-freeze Recoverability Diagnostic Extension (RDX)
+
+RDX was completed after the DANIDS 2.0 Studies 1--5 evidence freeze. It is a separately
+versioned diagnostic extension, not Study 6 or part of the original Study-4 confirmatory
+design, and it does not alter the hypothesis ledger above. It found that B400 and B1600
+provided only small mean increases in one-step recoverability while median P1 and P2
+remained 0% and positive rotation-level P2 effects occurred in 1/4 rotations. The frozen
+decision was `TRAINING_EVIDENCE_INCREASE_NOT_MATERIALLY_RECOVERABILITY_EXPANDING`.
+
+The bounded interpretation is that B100 training scarcity alone was insufficient to
+explain the observed recovery ceiling under the frozen compact model and A0--A4
+intervention family. This does not show that more data can never help or that safe
+adaptation is impossible generally. See [RDX_RESULTS.md](RDX_RESULTS.md) for the exact
+diagnostic counts, prospective gate, evidence timing, and reproducibility identities.
+
 ## Evidence boundary
 
 The findings are bounded to four related NetFlow-v3 domains, one compact MLP, three
 seeds, highly imbalanced Study-3 health states, one B100/D1 supervision regime, a
 constrained A0--A4 action space, sparse shared semantic-family support, and primary
-physical-slice censoring at `n >= 50`. No external CICIoT2023 validation, budget/delay
-sensitivity, attack-attribution experiment, or open-set experiment was performed.
+physical-slice censoring at `n >= 50`. No budget sensitivity was part of the original
+DANIDS 2.0 frozen Studies 1--5. RDX later performed a separately versioned
+training-evidence sensitivity analysis; no delay sensitivity was performed. No external
+CICIoT2023 validation, attack-attribution experiment, or open-set experiment was
+performed.
 
 The canonical frozen bundles exist in the research workspace at the paths above and are
 intentionally ignored by Git. They are not included in a clean GitHub source checkout.
