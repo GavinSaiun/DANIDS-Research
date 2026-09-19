@@ -31,6 +31,11 @@ from danids.evaluation.policy_development import evaluate_policy_development
 from danids.evaluation.policy_qualification import evaluate_policy_qualification
 from danids.evaluation.rdx import evaluate_rdx_recoverability
 from danids.evaluation.rdx_analysis import analyze_rdx_recoverability
+from danids.evaluation.rdx_training_analysis import (
+    SUMMARY_FILENAME,
+    RdxTrainingAnalysisError,
+    analyze_rdx004_training_evidence,
+)
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
@@ -385,6 +390,18 @@ def _evaluate_rdx_recoverability(args: argparse.Namespace) -> int:
 def _analyze_rdx_recoverability(args: argparse.Namespace) -> int:
     output = analyze_rdx_recoverability(args.rdx_bundle_root, args.output_dir)
     summary = json.loads((output / "rdx_analysis_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _analyze_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    output = analyze_rdx004_training_evidence(
+        args.study4_evaluation_dir,
+        args.preflight_dir,
+        args.run_root,
+        args.output_dir,
+    )
+    summary = json.loads((output / SUMMARY_FILENAME).read_text(encoding="utf-8"))
     print(json.dumps({"output_directory": str(output), **summary}, indent=2))
     return 0
 
@@ -782,6 +799,16 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_rdx.add_argument("--output-dir", required=True, type=Path)
     analyze_rdx.set_defaults(handler=_analyze_rdx_recoverability)
 
+    analyze_rdx004 = subparsers.add_parser(
+        "analyze-rdx004-training-evidence",
+        help="validate and analyze the frozen RDX-004 B100/B400/B1600 corpus",
+    )
+    analyze_rdx004.add_argument("--study4-evaluation-dir", required=True, type=Path)
+    analyze_rdx004.add_argument("--preflight-dir", required=True, type=Path)
+    analyze_rdx004.add_argument("--run-root", required=True, type=Path)
+    analyze_rdx004.add_argument("--output-dir", required=True, type=Path)
+    analyze_rdx004.set_defaults(handler=_analyze_rdx004_training_evidence)
+
     preflight_rdx004 = subparsers.add_parser(
         "preflight-rdx004-training-evidence",
         help="construct and validate the artifact-only RDX-004 24-run preflight",
@@ -984,6 +1011,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         TypeError,
         ValueError,
         Study5BLauncherError,
+        RdxTrainingAnalysisError,
         RdxTrainingEvidencePreflightError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)

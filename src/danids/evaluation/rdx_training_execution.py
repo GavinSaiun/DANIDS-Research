@@ -197,6 +197,48 @@ class _PreflightReference:
 
 
 @dataclass(frozen=True, slots=True)
+class _ValidatedPairedSource:
+    path: Path
+    experiment_id: str
+    method: Study4Method
+    sequence: tuple[str, ...]
+    seed: int
+    smoke: bool
+    contract_digest: str
+    source_checkpoint_sha256: str
+    artifact_manifest_sha256: str
+    manifest_bundle_digest: str
+    pipeline: dict[str, Any]
+    source_selection: dict[str, Any]
+    config: dict[str, Any]
+
+
+@dataclass(slots=True)
+class _PreflightAuthority:
+    """One process-local, fully validated view of the common RDX-005 authority."""
+
+    root: Path
+    bundle_digest: str
+    contract: dict[str, Any]
+    run_rows: tuple[dict[str, str], ...]
+    starting_rows: tuple[dict[str, str], ...]
+    query_rows: tuple[dict[str, str], ...]
+    nested_rows: tuple[dict[str, str], ...]
+    audit_rows: tuple[dict[str, str], ...]
+    allocation_rows: tuple[dict[str, str], ...]
+    paired_sources: dict[Path, _ValidatedPairedSource]
+
+
+@dataclass(frozen=True, slots=True)
+class _DependencyDigestSnapshot:
+    """Exact file-set and content identity for one scoped batch validation."""
+
+    roots: tuple[Path, ...]
+    explicit_files: tuple[Path, ...]
+    digests: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
 class _HistoricalMemoryEvidence:
     replay_scoped_positions: tuple[Mapping[str, object], ...]
     replay_rows: int
@@ -433,12 +475,7 @@ def _read_preflight_csv(root: Path, name: str) -> list[dict[str, str]]:
     return rows
 
 
-def _load_preflight_reference(
-    preflight_dir: str | Path,
-    identity: RDX004ExecutionIdentity,
-    *,
-    declared_bundle_digest: str,
-) -> _PreflightReference:
+def _load_preflight_authority(preflight_dir: str | Path) -> _PreflightAuthority:
     root = Path(preflight_dir).resolve()
     if not root.is_dir():
         raise RDX004RunArtifactError(f"RDX-005 preflight directory is absent: {root}")
@@ -454,10 +491,7 @@ def _load_preflight_reference(
         manifest_name=PREFLIGHT_MANIFEST_FILENAME,
         expected_version=None,
     )
-    if (
-        bundle_digest != declared_bundle_digest
-        or bundle_digest != RDX006_REQUIRED_PREFLIGHT_BUNDLE_DIGEST
-    ):
+    if bundle_digest != RDX006_REQUIRED_PREFLIGHT_BUNDLE_DIGEST:
         raise RDX004RunArtifactError("RDX-005 preflight bundle identity differs")
     if manifest.get("version") != "rdx004-training-evidence-preflight-v1":
         raise RDX004RunArtifactError("RDX-005 preflight artifact version differs")
@@ -479,16 +513,85 @@ def _load_preflight_reference(
     ):
         raise RDX004RunArtifactError("RDX-005 preflight protocol identity differs")
 
+    return _PreflightAuthority(
+        root=root,
+        bundle_digest=bundle_digest,
+        contract=contract,
+        run_rows=tuple(_read_preflight_csv(root, RUN_MATRIX_FILENAME)),
+        starting_rows=tuple(_read_preflight_csv(root, STARTING_STATE_FILENAME)),
+        query_rows=tuple(_read_preflight_csv(root, QUERY_MATRIX_FILENAME)),
+        nested_rows=tuple(_read_preflight_csv(root, NESTED_SELECTION_FILENAME)),
+        audit_rows=tuple(_read_preflight_csv(root, AUDIT_IDENTITY_FILENAME)),
+        allocation_rows=tuple(_read_preflight_csv(root, TRAINING_ALLOCATION_FILENAME)),
+        paired_sources={},
+    )
+
+
+def _load_paired_source(
+    authority: _PreflightAuthority,
+    paired_run: Path,
+) -> _ValidatedPairedSource:
+    cached = authority.paired_sources.get(paired_run)
+    if cached is not None:
+        return cached
+    try:
+        validated = validate_study4_run(paired_run, allow_smoke=False)
+        source_manifest = _load_json(paired_run / MANIFEST_FILENAME)
+        source_provenance = _load_json(paired_run / STUDY4_PROVENANCE_FILENAME)
+        source_memory = _load_json(paired_run / MEMORY_FILENAME)
+        source_config = _load_yaml(paired_run / CONFIG_FILENAME)
+        manifest_sha256 = _file_sha256(paired_run / MANIFEST_FILENAME)
+    except Exception as exc:
+        raise RDX004RunArtifactError("paired canonical B100 run failed validation") from exc
+    paired_pipeline_fields = (
+        "feature_contract_version",
+        "feature_columns",
+        "dataset_fingerprints",
+        "manifest_partition_ranges",
+        "window_size",
+        "boundary_mode",
+        "health_artifact_identity",
+        "health_model_sha256",
+        "health_feature_contract_digest",
+    )
+    if any(field not in source_provenance for field in paired_pipeline_fields):
+        raise RDX004RunArtifactError("paired canonical B100 pipeline provenance is incomplete")
+    source = _ValidatedPairedSource(
+        path=validated.path,
+        experiment_id=validated.experiment_id,
+        method=validated.method,
+        sequence=tuple(validated.sequence),
+        seed=validated.seed,
+        smoke=validated.smoke,
+        contract_digest=validated.contract_digest,
+        source_checkpoint_sha256=validated.source_checkpoint_sha256,
+        artifact_manifest_sha256=manifest_sha256,
+        manifest_bundle_digest=_sha256(
+            source_manifest.get("bundle_digest"), "paired B100 bundle digest"
+        ),
+        pipeline={field: source_provenance[field] for field in paired_pipeline_fields},
+        source_selection=_mapping(
+            source_memory.get("source_selection"), "paired B100 source selection"
+        ),
+        config=source_config,
+    )
+    authority.paired_sources[paired_run] = source
+    return source
+
+
+def _preflight_reference_from_authority(
+    authority: _PreflightAuthority,
+    identity: RDX004ExecutionIdentity,
+    *,
+    declared_bundle_digest: str,
+) -> _PreflightReference:
+    if declared_bundle_digest != authority.bundle_digest:
+        raise RDX004RunArtifactError("RDX-005 preflight bundle identity differs")
+
     confirmatory_id = identity.expected_confirmatory_run_id
-    run_matches = [
-        row
-        for row in _read_preflight_csv(root, RUN_MATRIX_FILENAME)
-        if row.get("run_id") == confirmatory_id
-    ]
+    run_matches = [row for row in authority.run_rows if row.get("run_id") == confirmatory_id]
     starting_matches = [
-        row
-        for row in _read_preflight_csv(root, STARTING_STATE_FILENAME)
-        if row.get("run_id") == confirmatory_id
+        row for row in authority.starting_rows if row.get("run_id") == confirmatory_id
     ]
     if len(run_matches) != 1 or len(starting_matches) != 1:
         raise RDX004RunArtifactError("execution identity has no unique preflight pairing")
@@ -512,14 +615,7 @@ def _load_preflight_reference(
         raise RDX004RunArtifactError("execution identity differs from its preflight row")
 
     paired_run = Path(str(run_row.get("paired_b100_run_path", ""))).resolve()
-    try:
-        validated_source = validate_study4_run(paired_run, allow_smoke=False)
-        source_manifest = _load_json(paired_run / MANIFEST_FILENAME)
-        source_provenance = _load_json(paired_run / STUDY4_PROVENANCE_FILENAME)
-        source_memory = _load_json(paired_run / MEMORY_FILENAME)
-        source_config = _load_yaml(paired_run / CONFIG_FILENAME)
-    except Exception as exc:
-        raise RDX004RunArtifactError("paired canonical B100 run failed validation") from exc
+    validated_source = _load_paired_source(authority, paired_run)
     if (
         validated_source.path != paired_run
         or validated_source.experiment_id != identity.paired_b100_experiment_id
@@ -529,19 +625,16 @@ def _load_preflight_reference(
         or validated_source.smoke
         or validated_source.contract_digest != run_row.get("paired_b100_scientific_contract_digest")
         or validated_source.source_checkpoint_sha256 != run_row.get("source_checkpoint_sha256")
-        or _file_sha256(paired_run / MANIFEST_FILENAME)
+        or validated_source.artifact_manifest_sha256
         != run_row.get("paired_b100_artifact_manifest_sha256")
-        or source_manifest.get("bundle_digest") != run_row.get("paired_b100_manifest_bundle_digest")
+        or validated_source.manifest_bundle_digest
+        != run_row.get("paired_b100_manifest_bundle_digest")
     ):
         raise RDX004RunArtifactError("paired canonical B100 identity differs from preflight")
 
     query_rows = tuple(
         sorted(
-            (
-                row
-                for row in _read_preflight_csv(root, QUERY_MATRIX_FILENAME)
-                if row.get("run_id") == confirmatory_id
-            ),
+            (row for row in authority.query_rows if row.get("run_id") == confirmatory_id),
             key=_row_key,
         )
     )
@@ -550,53 +643,130 @@ def _load_preflight_reference(
     paired_id = identity.paired_b100_experiment_id
     nested_rows = {
         _row_key(row): row
-        for row in _read_preflight_csv(root, NESTED_SELECTION_FILENAME)
+        for row in authority.nested_rows
         if row.get("paired_b100_experiment_id") == paired_id
     }
     audit_rows = {
         _row_key(row): row
-        for row in _read_preflight_csv(root, AUDIT_IDENTITY_FILENAME)
+        for row in authority.audit_rows
         if row.get("paired_b100_experiment_id") == paired_id
     }
     allocation_rows = {
         _row_key(row): row
-        for row in _read_preflight_csv(root, TRAINING_ALLOCATION_FILENAME)
+        for row in authority.allocation_rows
         if row.get("paired_b100_experiment_id") == paired_id
         and row.get("budget") == identity.budget.value
     }
     keys = {_row_key(row) for row in query_rows}
     if set(nested_rows) != keys or set(audit_rows) != keys or set(allocation_rows) != keys:
         raise RDX004RunArtifactError("preflight query/allocation coverage is inconsistent")
-    paired_pipeline_fields = (
-        "feature_contract_version",
-        "feature_columns",
-        "dataset_fingerprints",
-        "manifest_partition_ranges",
-        "window_size",
-        "boundary_mode",
-        "health_artifact_identity",
-        "health_model_sha256",
-        "health_feature_contract_digest",
-    )
-    if any(field not in source_provenance for field in paired_pipeline_fields):
-        raise RDX004RunArtifactError("paired canonical B100 pipeline provenance is incomplete")
-    paired_pipeline = {field: source_provenance[field] for field in paired_pipeline_fields}
-    paired_source_selection = _mapping(
-        source_memory.get("source_selection"), "paired B100 source selection"
-    )
     return _PreflightReference(
-        root=root,
-        bundle_digest=bundle_digest,
+        root=authority.root,
+        bundle_digest=authority.bundle_digest,
         run_row=run_row,
         starting_row=starting_row,
         query_rows=query_rows,
         nested_rows=nested_rows,
         audit_rows=audit_rows,
         allocation_rows=allocation_rows,
-        paired_pipeline=paired_pipeline,
-        paired_source_selection=paired_source_selection,
-        paired_config_source=source_config,
+        paired_pipeline=validated_source.pipeline,
+        paired_source_selection=validated_source.source_selection,
+        paired_config_source=validated_source.config,
     )
+
+
+def _load_preflight_reference(
+    preflight_dir: str | Path,
+    identity: RDX004ExecutionIdentity,
+    *,
+    declared_bundle_digest: str,
+) -> _PreflightReference:
+    authority = _load_preflight_authority(preflight_dir)
+    return _preflight_reference_from_authority(
+        authority,
+        identity,
+        declared_bundle_digest=declared_bundle_digest,
+    )
+
+
+def _required_dependency_path(value: object, name: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise RDX004RunArtifactError(f"{name} dependency path is absent")
+    return Path(value).resolve()
+
+
+def _authority_dependency_scope(
+    authority: _PreflightAuthority,
+    run_dirs: Sequence[str | Path],
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    inputs = _mapping(authority.contract.get("inputs"), "preflight inputs")
+    roots = {
+        authority.root,
+        _required_dependency_path(inputs.get("study4_evaluation_root"), "Study-4 evaluation"),
+        _required_dependency_path(inputs.get("manifest_root"), "split-manifest root"),
+        *(Path(path).resolve() for path in run_dirs),
+    }
+    sources = _records(
+        authority.contract.get("canonical_b100_sources"),
+        "canonical B100 sources",
+    )
+    for source in sources:
+        roots.add(_required_dependency_path(source.get("source_run_path"), "canonical B100 run"))
+        roots.add(_required_dependency_path(source.get("study1_run_path"), "Study-1 run"))
+    sentinels = _mapping(
+        authority.contract.get("source_immutability_sentinels"),
+        "preflight source immutability sentinels",
+    )
+    explicit_files = {_required_dependency_path(path, "source sentinel") for path in sentinels}
+    return (
+        tuple(sorted(roots, key=lambda path: str(path).casefold())),
+        tuple(sorted(explicit_files, key=lambda path: str(path).casefold())),
+    )
+
+
+def _dependency_digests(roots: Sequence[Path], explicit_files: Sequence[Path]) -> dict[str, str]:
+    entries: dict[str, str] = {}
+    for path in explicit_files:
+        if not path.is_file():
+            raise RDX004RunArtifactError(f"batch validation dependency file is absent: {path}")
+        entries[str(path)] = f"FILE:{_file_sha256(path)}"
+    for root in roots:
+        if not root.is_dir():
+            raise RDX004RunArtifactError(f"batch validation dependency root is absent: {root}")
+        entries[str(root)] = "DIRECTORY"
+        try:
+            for path in root.rglob("*"):
+                if path.is_file():
+                    entries[str(path)] = f"FILE:{_file_sha256(path)}"
+                elif path.is_dir():
+                    entries[str(path)] = "DIRECTORY"
+                else:
+                    raise RDX004RunArtifactError(
+                        f"unsupported batch validation dependency entry: {path}"
+                    )
+        except OSError as exc:
+            raise RDX004RunArtifactError(
+                f"cannot enumerate batch validation dependency root {root}: {exc}"
+            ) from exc
+    return dict(sorted(entries.items(), key=lambda item: item[0].casefold()))
+
+
+def _capture_dependency_snapshot(
+    authority: _PreflightAuthority,
+    run_dirs: Sequence[str | Path],
+) -> _DependencyDigestSnapshot:
+    roots, explicit_files = _authority_dependency_scope(authority, run_dirs)
+    return _DependencyDigestSnapshot(
+        roots=roots,
+        explicit_files=explicit_files,
+        digests=_dependency_digests(roots, explicit_files),
+    )
+
+
+def _assert_dependency_snapshot_unchanged(snapshot: _DependencyDigestSnapshot) -> None:
+    current = _dependency_digests(snapshot.roots, snapshot.explicit_files)
+    if current != snapshot.digests:
+        raise RDX004RunArtifactError("batch validation dependency changed during scoped validation")
 
 
 def _identity_from_contract(
@@ -2928,19 +3098,13 @@ def _validate_resources_and_summary(
         raise RDX004RunArtifactError("run summary differs from validated evidence")
 
 
-def validate_rdx004_run(
+def _validate_rdx004_run_with_authority(
     run_dir: str | Path,
     *,
-    expected_smoke: bool = False,
-    preflight_dir: str | Path = Path("rdx/training-evidence-preflight-v1"),
+    expected_smoke: bool,
+    preflight_dir: str | Path,
+    authority: _PreflightAuthority | None,
 ) -> ValidatedRDX004Run:
-    """Validate one complete sealed RDX-004 run without executing the method.
-
-    Confirmatory validation is the default.  A smoke artifact is accepted only
-    when the caller explicitly sets ``expected_smoke=True``; its bounded plan
-    remains non-scientific and cannot be mistaken for a roster cell.
-    """
-
     root = Path(run_dir).resolve()
     if not root.is_dir():
         raise RDX004RunArtifactError(f"RDX-004 run directory is absent: {root}")
@@ -2961,12 +3125,21 @@ def validate_rdx004_run(
     contract = payloads[EXECUTION_CONTRACT_FILENAME]
     identity = _identity_from_contract(contract, expected_smoke=expected_smoke)
     preflight_record = _mapping(contract.get("preflight"), "execution preflight identity")
-    preflight = _load_preflight_reference(
-        preflight_dir,
-        identity,
-        declared_bundle_digest=_sha256(
-            preflight_record.get("bundle_digest"), "declared preflight bundle"
-        ),
+    declared_bundle_digest = _sha256(
+        preflight_record.get("bundle_digest"), "declared preflight bundle"
+    )
+    preflight = (
+        _load_preflight_reference(
+            preflight_dir,
+            identity,
+            declared_bundle_digest=declared_bundle_digest,
+        )
+        if authority is None
+        else _preflight_reference_from_authority(
+            authority,
+            identity,
+            declared_bundle_digest=declared_bundle_digest,
+        )
     )
     _validate_execution_contract(contract, identity, preflight)
     _validate_resolved_config(config, identity, contract, preflight)
@@ -3037,6 +3210,63 @@ def validate_rdx004_run(
     )
 
 
+def validate_rdx004_run(
+    run_dir: str | Path,
+    *,
+    expected_smoke: bool = False,
+    preflight_dir: str | Path = Path("rdx/training-evidence-preflight-v1"),
+) -> ValidatedRDX004Run:
+    """Validate one complete sealed RDX-004 run without executing the method.
+
+    Confirmatory validation is the default.  A smoke artifact is accepted only
+    when the caller explicitly sets ``expected_smoke=True``; its bounded plan
+    remains non-scientific and cannot be mistaken for a roster cell.  Each call
+    independently validates its preflight authority, matching the original
+    standalone fail-closed behavior.
+    """
+
+    return _validate_rdx004_run_with_authority(
+        run_dir,
+        expected_smoke=expected_smoke,
+        preflight_dir=preflight_dir,
+        authority=None,
+    )
+
+
+def validate_rdx004_runs(
+    run_dirs: Sequence[str | Path],
+    *,
+    expected_smoke: bool = False,
+    preflight_dir: str | Path = Path("rdx/training-evidence-preflight-v1"),
+) -> tuple[ValidatedRDX004Run, ...]:
+    """Validate a batch against one scoped common authority and mutation snapshot.
+
+    The preflight is independently source-rederived once for this call.  Every
+    run still receives the complete standalone semantic validation, while paired
+    B100 validation is reused only inside this batch.  Full dependency file sets
+    and content digests are checked again before a successful return.
+    """
+
+    paths = tuple(Path(path).resolve() for path in run_dirs)
+    if not paths:
+        raise RDX004RunArtifactError("RDX-004 batch validation requires at least one run")
+    if len(paths) != len(set(paths)):
+        raise RDX004RunArtifactError("RDX-004 batch validation contains duplicate run paths")
+    authority = _load_preflight_authority(preflight_dir)
+    snapshot = _capture_dependency_snapshot(authority, paths)
+    validated = tuple(
+        _validate_rdx004_run_with_authority(
+            path,
+            expected_smoke=expected_smoke,
+            preflight_dir=preflight_dir,
+            authority=authority,
+        )
+        for path in paths
+    )
+    _assert_dependency_snapshot_unchanged(snapshot)
+    return validated
+
+
 __all__ = [
     "BRANCH_INTEGRITY_FILENAME",
     "CONFIG_FILENAME",
@@ -3056,4 +3286,5 @@ __all__ = [
     "RDX004RunArtifactError",
     "ValidatedRDX004Run",
     "validate_rdx004_run",
+    "validate_rdx004_runs",
 ]
