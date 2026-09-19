@@ -53,3 +53,21 @@ jobs:
 
       - name: Check whitespace
         run: git diff --check
+
+      - name: Verify committed public Explorer projections
+        run: python -m danids export-explorer-data --output-dir explorer/public/evidence --check
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: explorer/package-lock.json
+
+      - name: Validate and build Explorer (no research datasets)
+        working-directory: explorer
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build

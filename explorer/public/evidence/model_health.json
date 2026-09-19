@@ -1,0 +1,81 @@
+{
+  "data": {
+    "confidence": "Wilson 95%",
+    "feature_groups": [
+      "Distribution shift",
+      "Score / output behaviour",
+      "Uncertainty / confidence",
+      "Representation",
+      "Conformal set behaviour"
+    ],
+    "features": [
+      "dist_covariance_relative_frobenius",
+      "dist_domain_classifier_auroc",
+      "dist_mmd2_linear_rbf",
+      "dist_wasserstein_max",
+      "dist_wasserstein_mean",
+      "dist_wasserstein_median",
+      "dist_wasserstein_p90",
+      "model_score_mean",
+      "model_score_std",
+      "model_score_p01",
+      "model_score_p05",
+      "model_score_p50",
+      "model_score_p95",
+      "model_score_p99",
+      "model_predicted_attack_rate",
+      "model_predicted_attack_rate_change",
+      "model_score_wasserstein",
+      "model_entropy_mean",
+      "model_entropy_p90",
+      "model_confidence_mean",
+      "model_confidence_below_060",
+      "model_confidence_below_075",
+      "model_embedding_centroid_l2",
+      "model_embedding_covariance_relative_frobenius",
+      "model_conformal_non_singleton_rate",
+      "model_conformal_empty_rate",
+      "model_conformal_two_class_rate",
+      "model_conformal_mean_set_size"
+    ],
+    "recall_loss_tolerance": 0.1,
+    "states": [
+      {
+        "name": "SAFE",
+        "rule": "FPR upper bound ≤ target AND recall lower bound ≥ reference recall − tolerance."
+      },
+      {
+        "name": "UNCERTAIN",
+        "rule": "Neither sufficient evidence of violation nor both safety conditions; includes missing support."
+      },
+      {
+        "name": "HARMFUL",
+        "rule": "FPR lower bound > target OR recall upper bound < reference recall − tolerance."
+      }
+    ],
+    "target_fpr": 0.001
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "src/danids/config/core.py",
+      "sha256": "4564691bd72e8687b8ba5075fe21f0c789547bfafa777c37ad4ca2ff47ab592f"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "docs/thesis_evidence_freeze.md",
+      "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "src/danids/health/states.py",
+      "sha256": "6481fece908227bc2ada14af933495d4b14ef3b145ee11097dd10f5e94db8e61"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "docs/decisions.md",
+      "sha256": "031198fd5be7f1afc930672488493d4467da6d59f1180cea6c43291f4d30bdd6"
+    }
+  ]
+}

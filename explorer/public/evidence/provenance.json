@@ -1,0 +1,28 @@
+{
+  "data": {
+    "bundle_digest": "c28ef8a5b73db863ec18be0c3f21110defde34967623214268e169312362fbc7",
+    "contract_sha256": "8a9ee12ad626014b3903c9c34f8117fb01ebabcf60808b0de507bd5fadfac8a8",
+    "freeze_tag": "v2.0-thesis-freeze",
+    "rdx_tag": "rdx-training-evidence-final",
+    "scope": "Public visualization projections; not a revalidation of ignored evidence bundles.",
+    "software_version": "v2.1.0"
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "RDX_RESULTS.md",
+      "sha256": "bd07c9287e5f8a0804552eb7bc7db33d03c3b57b096c72b29b2143a05f0ebee5"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "thesis/assets/visual_manifest.json",
+      "sha256": "0d03c5894c2e30f357132f6d0f293e05cab9c159c660731dff90af93236aecbb"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "pyproject.toml",
+      "sha256": "9f8ef69b50b9b908b6c84b74c2676e0acf80895bb078c4913f770d19ea1f7304"
+    }
+  ]
+}

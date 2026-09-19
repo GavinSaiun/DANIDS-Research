@@ -1,0 +1,38 @@
+{
+  "data": {
+    "methods": {
+      "ALWAYS_ADAPT": {
+        "accepted_updates": 70,
+        "compliance_rate": 0.1684286898839138,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 8023
+      },
+      "DANIDS_CORE": {
+        "accepted_updates": 49,
+        "compliance_rate": 0.1407545605306799,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 8290
+      },
+      "OFFLINE_ORACLE": {
+        "accepted_updates": 11,
+        "compliance_rate": 0.1906094527363184,
+        "labels_requested": 3600,
+        "unsafe_exposure_windows": 7809
+      },
+      "STATIC": {
+        "accepted_updates": 0,
+        "compliance_rate": 0.1696724709784411,
+        "labels_requested": 0,
+        "unsafe_exposure_windows": 8011
+      }
+    }
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "thesis/assets/visual_manifest.json",
+      "sha256": "0d03c5894c2e30f357132f6d0f293e05cab9c159c660731dff90af93236aecbb"
+    }
+  ]
+}

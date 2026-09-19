@@ -1,0 +1,36 @@
+{
+  "files": [
+    {
+      "bytes": 2782,
+      "path": "cross_domain.json",
+      "sha256": "555c339eb73cc2b651eefdcf59217c15e68763705fb92f48041fa867afc466ca"
+    },
+    {
+      "bytes": 2497,
+      "path": "model_health.json",
+      "sha256": "6786c9800a29955c035435f74d2a769929a72ed5131127111f26dc211dd3c983"
+    },
+    {
+      "bytes": 1370,
+      "path": "overview.json",
+      "sha256": "621b4b820190a833e6e022de84fb0f00654c37e124180b85538378090d288cc1"
+    },
+    {
+      "bytes": 1002,
+      "path": "provenance.json",
+      "sha256": "4a8b5406864d19cd2148588242c0c75fee44264aad03aa8a5c8648f29ed91ee4"
+    },
+    {
+      "bytes": 4253,
+      "path": "rdx.json",
+      "sha256": "595a2ce5d0c557276a962369ee2226cc868fe69a488ebf4b26cc420eac54213f"
+    },
+    {
+      "bytes": 1026,
+      "path": "study4.json",
+      "sha256": "b4d6436e9a5208a9aa759faf2b7155c2153b100009850869ba0232f6bee914c9"
+    }
+  ],
+  "hash_mode": "canonical-lf-utf8",
+  "schema_version": "danids-explorer-v1"
+}
