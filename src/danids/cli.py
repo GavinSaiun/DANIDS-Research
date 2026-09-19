@@ -616,6 +616,14 @@ def _build_frozen_evidence_archive(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_explorer(args: argparse.Namespace) -> int:
+    from danids.evaluation.explorer_export import export_explorer_data
+
+    output = export_explorer_data(args.repo_root, args.output_dir, check=args.check)
+    print(f"Explorer evidence verified: {output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="danids", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -997,6 +1005,13 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_archive.add_argument("--repo-root", type=Path)
     evidence_archive.add_argument("--output-dir", required=True, type=Path)
     evidence_archive.set_defaults(handler=_build_frozen_evidence_archive)
+    explorer = subparsers.add_parser(
+        "export-explorer-data", help="export or check read-only public Explorer projections"
+    )
+    explorer.add_argument("--repo-root", type=Path, default=Path.cwd())
+    explorer.add_argument("--output-dir", type=Path, required=True)
+    explorer.add_argument("--check", action="store_true")
+    explorer.set_defaults(handler=_export_explorer)
     return parser
 
 

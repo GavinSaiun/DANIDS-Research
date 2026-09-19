@@ -26,3 +26,7 @@
 *.png binary
 *.pt binary
 *.pth binary
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.html text eol=lf

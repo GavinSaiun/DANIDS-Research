@@ -1,0 +1,145 @@
+{
+  "data": {
+    "actions": [
+      {
+        "detail": "Keep the deployed model and threshold unchanged.",
+        "id": "A0",
+        "name": "NO_OP"
+      },
+      {
+        "detail": "Threshold-only candidate; strict benign support of at least 3,838 at FPR 0.001 with two-sided Wilson 95%, normally infeasible under B100.",
+        "id": "A1",
+        "name": "RECALIBRATE"
+      },
+      {
+        "detail": "Train the head using legitimately released training evidence.",
+        "id": "A2",
+        "name": "HEAD_UPDATE"
+      },
+      {
+        "detail": "Full-model fine-tuning; Oracle-selectable, not Core-selectable. Also available to prescribed adaptation baselines.",
+        "id": "A3",
+        "name": "FULL_FINE_TUNE"
+      },
+      {
+        "detail": "Update with legitimate current training evidence and historical replay; audit rows never train.",
+        "id": "A4",
+        "name": "REPLAY_UPDATE"
+      }
+    ],
+    "budgets": [
+      {
+        "budget": "B100",
+        "eligible": 7776,
+        "mean_p1": 0.212,
+        "mean_p2": 0.188,
+        "median_p1": 0,
+        "median_p2": 0,
+        "optimizer_rows": 80,
+        "timing": "historical"
+      },
+      {
+        "budget": "B400",
+        "eligible": 7480,
+        "mean_p1": 0.416,
+        "mean_p2": 0.416,
+        "median_p1": 0,
+        "median_p2": 0,
+        "optimizer_rows": 380,
+        "timing": "prospective"
+      },
+      {
+        "budget": "B1600",
+        "eligible": 7428,
+        "mean_p1": 0.568,
+        "mean_p2": 0.55,
+        "median_p1": 0,
+        "median_p2": 0,
+        "optimizer_rows": 1580,
+        "timing": "prospective"
+      }
+    ],
+    "contrasts": [
+      {
+        "contrast": "B400 − B100",
+        "mean_pp": 0.228,
+        "median_pp": 0,
+        "positive_rotations": "1/4"
+      },
+      {
+        "contrast": "B1600 − B100",
+        "mean_pp": 0.362,
+        "median_pp": 0,
+        "positive_rotations": "1/4"
+      },
+      {
+        "contrast": "B1600 − B400",
+        "mean_pp": 0.134,
+        "median_pp": 0,
+        "positive_rotations": "1/4"
+      }
+    ],
+    "core_harmful": 8290,
+    "core_recognised": 5715,
+    "decision": "TRAINING_EVIDENCE_INCREASE_NOT_MATERIALLY_RECOVERABILITY_EXPANDING",
+    "gate_median_pp": 2,
+    "gate_positive_rotations": "3/4",
+    "interpretation": "B100 training scarcity alone was insufficient to explain the observed recovery ceiling under the frozen compact model and A0–A4 intervention family.",
+    "paired_units": 12,
+    "pathways": [
+      {
+        "denominator": 32133,
+        "id": "recognition",
+        "numerator": 22539,
+        "outcome": "PREDICTED_HARMFUL in the same window",
+        "percent": "70.14%",
+        "population": "Frozen Study-4 matrix",
+        "title": "Harm recognised",
+        "unit": "evaluator-HARMFUL window"
+      },
+      {
+        "denominator": 7776,
+        "id": "capability",
+        "numerator": 9,
+        "outcome": "Any confirmed A0–A4 one-step success",
+        "percent": "≈0.12%",
+        "population": "Offline Oracle only",
+        "title": "One-step capability",
+        "unit": "eligible harmful Oracle decision"
+      },
+      {
+        "denominator": 130,
+        "id": "immediate",
+        "numerator": 4,
+        "outcome": "Immediate SAFE successor",
+        "percent": "3.08%",
+        "population": "Accepted model-changing interventions",
+        "title": "Immediate deployed recovery",
+        "unit": "accepted deployed intervention"
+      },
+      {
+        "denominator": 65,
+        "id": "sustained",
+        "numerator": 2,
+        "outcome": "Two consecutive SAFE windows",
+        "percent": "3.08%",
+        "population": "Assessable two-window horizons only",
+        "title": "Sustained deployed recovery",
+        "unit": "sustained-recovery-assessable intervention"
+      }
+    ]
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "RDX_RESULTS.md",
+      "sha256": "bd07c9287e5f8a0804552eb7bc7db33d03c3b57b096c72b29b2143a05f0ebee5"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "docs/decisions.md",
+      "sha256": "031198fd5be7f1afc930672488493d4467da6d59f1180cea6c43291f4d30bdd6"
+    }
+  ]
+}

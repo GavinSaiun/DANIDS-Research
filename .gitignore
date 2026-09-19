@@ -34,3 +34,6 @@ configs/datasets.local.yaml
 /.task006-test-tmp*/
 /.pytest-core-artifacts-*/
 /pytest-cache-files-*/
+explorer/node_modules/
+explorer/coverage/
+explorer/public/.explorer-*/

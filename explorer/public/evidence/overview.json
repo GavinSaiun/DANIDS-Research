@@ -1,0 +1,43 @@
+{
+  "data": {
+    "chain": [
+      "Cross-domain shift",
+      "Operational degradation",
+      "Harmful operation",
+      "Recognition",
+      "Intervention",
+      "Recovery",
+      "Training-evidence sensitivity"
+    ],
+    "ledger": {
+      "H1": "SUPPORTED",
+      "H10": "PARTIAL",
+      "H2": "SUPPORTED",
+      "H3": "NOT_SUPPORTED",
+      "H4": "NOT_SUPPORTED",
+      "H6": "NOT_TESTABLE",
+      "H7": "NOT_SUPPORTED",
+      "H8": "NOT_TESTABLE",
+      "H9": "PARTIAL"
+    },
+    "limitations": [
+      "Study 5A measures family-conditioned binary detection recall, not attribution or open-set recognition.",
+      "H7 combines prior U-T-C-B evidence with three prospectively frozen missing rotations; replay benefits did not generalise.",
+      "Four related NetFlow-v3 domains, one compact MLP and three seeds bound the evidence.",
+      "RDX is post-freeze evidence, not Study 6 or part of the original Study-4 confirmatory design."
+    ]
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "docs/thesis_evidence_freeze.md",
+      "sha256": "6d6c996f5a70ad3a63104f87f715afb4c921f9025c51ea0e927c5c33228a7c11"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "RDX_RESULTS.md",
+      "sha256": "bd07c9287e5f8a0804552eb7bc7db33d03c3b57b096c72b29b2143a05f0ebee5"
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "data": {
+    "aggregation": "Mean across seeds 42–44; not seed-level evidence",
+    "cells": [
+      {
+        "fpr_budget_ratio": "0.768",
+        "recall": "1",
+        "source": "U",
+        "target": "U"
+      },
+      {
+        "fpr_budget_ratio": "895",
+        "recall": "0.582",
+        "source": "U",
+        "target": "T"
+      },
+      {
+        "fpr_budget_ratio": "657",
+        "recall": "0.764",
+        "source": "U",
+        "target": "C"
+      },
+      {
+        "fpr_budget_ratio": "800",
+        "recall": "0.3",
+        "source": "U",
+        "target": "B"
+      },
+      {
+        "fpr_budget_ratio": "2.74",
+        "recall": "0.000411",
+        "source": "T",
+        "target": "U"
+      },
+      {
+        "fpr_budget_ratio": "5.43",
+        "recall": "0.00444",
+        "source": "T",
+        "target": "T"
+      },
+      {
+        "fpr_budget_ratio": "0.00314",
+        "recall": "0",
+        "source": "T",
+        "target": "C"
+      },
+      {
+        "fpr_budget_ratio": "0",
+        "recall": "0",
+        "source": "T",
+        "target": "B"
+      },
+      {
+        "fpr_budget_ratio": "30.2",
+        "recall": "0.0307",
+        "source": "C",
+        "target": "U"
+      },
+      {
+        "fpr_budget_ratio": "60.2",
+        "recall": "0.367",
+        "source": "C",
+        "target": "T"
+      },
+      {
+        "fpr_budget_ratio": "0.0761",
+        "recall": "0.00104",
+        "source": "C",
+        "target": "C"
+      },
+      {
+        "fpr_budget_ratio": "36.7",
+        "recall": "0.0057",
+        "source": "C",
+        "target": "B"
+      },
+      {
+        "fpr_budget_ratio": "130",
+        "recall": "0.297",
+        "source": "B",
+        "target": "U"
+      },
+      {
+        "fpr_budget_ratio": "13.6",
+        "recall": "0.0508",
+        "source": "B",
+        "target": "T"
+      },
+      {
+        "fpr_budget_ratio": "27.1",
+        "recall": "0.0343",
+        "source": "B",
+        "target": "C"
+      },
+      {
+        "fpr_budget_ratio": "7.05",
+        "recall": "0.987",
+        "source": "B",
+        "target": "B"
+      }
+    ],
+    "domains": [
+      "U",
+      "T",
+      "C",
+      "B"
+    ],
+    "precision": "Published rounded F03 annotations",
+    "unavailable": [
+      "AUROC",
+      "PR-AUC",
+      "Seed-level values",
+      "Unrounded FPR"
+    ]
+  },
+  "schema_version": "danids-explorer-v1",
+  "sources": [
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "thesis/assets/visual_manifest.json",
+      "sha256": "0d03c5894c2e30f357132f6d0f293e05cab9c159c660731dff90af93236aecbb"
+    },
+    {
+      "hash_mode": "canonical-lf-utf8",
+      "path": "thesis/assets/svg/F03_static_transfer.svg",
+      "sha256": "77bab8e4d4fbad0493cdca3e31a31789714d6b4b3c3d8f0329917380bab02482"
+    }
+  ]
+}
