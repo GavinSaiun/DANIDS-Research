@@ -19,6 +19,8 @@ from danids.config.core import load_study4_core_config
 from danids.config.experiment import ExperimentConfig, load_experiment_config
 from danids.config.health import load_health_experiment_config
 from danids.config.policy_development import load_policy_development_config
+from danids.config.rdx_training_evidence import RDX004_ROTATIONS, RDX004Budget
+from danids.config.rdx_training_execution import load_rdx006_execution_config
 from danids.config.static import load_static_experiment_config
 from danids.config.study4 import load_study4_execution_config
 from danids.continual.supervision import load_or_create_supervision_schedule
@@ -27,6 +29,13 @@ from danids.data.registry import DatasetRegistry
 from danids.data.schema import discover_core_feature_contract, read_csv_header, validate_schema
 from danids.evaluation.policy_development import evaluate_policy_development
 from danids.evaluation.policy_qualification import evaluate_policy_qualification
+from danids.evaluation.rdx import evaluate_rdx_recoverability
+from danids.evaluation.rdx_analysis import analyze_rdx_recoverability
+from danids.evaluation.rdx_training_analysis import (
+    SUMMARY_FILENAME,
+    RdxTrainingAnalysisError,
+    analyze_rdx004_training_evidence,
+)
 from danids.evaluation.study1 import aggregate_static_study1
 from danids.evaluation.study2 import aggregate_continual_study2
 from danids.evaluation.study3 import evaluate_health_study3
@@ -39,6 +48,10 @@ from danids.experiments.health import HealthSmokeLimits, run_health_experiment
 from danids.experiments.policy_development import (
     PolicyDevelopmentSmokeLimits,
     run_policy_development,
+)
+from danids.experiments.rdx_training_evidence import (
+    RdxTrainingEvidencePreflightError,
+    build_rdx004_training_evidence_preflight,
 )
 from danids.experiments.static import (
     SmokeLimits,
@@ -361,6 +374,78 @@ def _evaluate_study4(args: argparse.Namespace) -> int:
     )
     summary = json.loads((output / "study4_summary.json").read_text(encoding="utf-8"))
     print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _evaluate_rdx_recoverability(args: argparse.Namespace) -> int:
+    output = evaluate_rdx_recoverability(
+        args.study4_evaluation_root,
+        args.output_dir,
+    )
+    summary = json.loads((output / "rdx_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _analyze_rdx_recoverability(args: argparse.Namespace) -> int:
+    output = analyze_rdx_recoverability(args.rdx_bundle_root, args.output_dir)
+    summary = json.loads((output / "rdx_analysis_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _analyze_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    output = analyze_rdx004_training_evidence(
+        args.study4_evaluation_dir,
+        args.preflight_dir,
+        args.run_root,
+        args.output_dir,
+    )
+    summary = json.loads((output / SUMMARY_FILENAME).read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _preflight_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    output = build_rdx004_training_evidence_preflight(
+        args.config,
+        args.output_dir,
+        study4_evaluation_root=args.study4_evaluation_root,
+        manifest_root=args.manifest_root,
+    )
+    summary = json.loads((output / "rdx004_preflight_summary.json").read_text(encoding="utf-8"))
+    print(json.dumps({"output_directory": str(output), **summary}, indent=2))
+    return 0
+
+
+def _run_rdx004_training_evidence(args: argparse.Namespace) -> int:
+    if args.execute is not True:
+        raise ValueError("RDX-004 execution requires explicit --execute")
+    rotation = tuple(args.rotation)
+    if rotation not in RDX004_ROTATIONS:
+        raise ValueError("RDX-004 rotation must be one exact frozen rotation")
+    registry = DatasetRegistry.from_yaml(args.datasets_config)
+    config = load_rdx006_execution_config(args.execution_config)
+
+    # Keep the execution implementation out of the artifact-only preflight
+    # import path.  The runner independently repeats every authorization and
+    # provenance check before it can materialize a run.
+    from danids.experiments.rdx_training_execution import run_rdx004_training_evidence
+
+    output = run_rdx004_training_evidence(
+        registry,
+        config,
+        budget=args.budget,
+        rotation=rotation,
+        seed=args.seed,
+        preflight_dir=args.preflight_dir,
+        manifest_dir=args.manifest_dir,
+        output_root=args.output_root,
+        device_name=args.device,
+        smoke=args.smoke,
+        execute=args.execute,
+    )
+    print(json.dumps({"run_directory": str(output)}, indent=2))
     return 0
 
 
@@ -698,6 +783,75 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_study4_parser.add_argument("--allow-smoke", action="store_true")
     evaluate_study4_parser.set_defaults(handler=_evaluate_study4)
 
+    evaluate_rdx = subparsers.add_parser(
+        "evaluate-rdx-recoverability",
+        help="derive the frozen artifact-only RDX recoverability diagnostics",
+    )
+    evaluate_rdx.add_argument("--study4-evaluation-root", required=True, type=Path)
+    evaluate_rdx.add_argument("--output-dir", required=True, type=Path)
+    evaluate_rdx.set_defaults(handler=_evaluate_rdx_recoverability)
+
+    analyze_rdx = subparsers.add_parser(
+        "analyze-rdx-recoverability",
+        help="artifact-only scientific analysis of the validated RDX diagnostics",
+    )
+    analyze_rdx.add_argument("--rdx-bundle-root", required=True, type=Path)
+    analyze_rdx.add_argument("--output-dir", required=True, type=Path)
+    analyze_rdx.set_defaults(handler=_analyze_rdx_recoverability)
+
+    analyze_rdx004 = subparsers.add_parser(
+        "analyze-rdx004-training-evidence",
+        help="validate and analyze the frozen RDX-004 B100/B400/B1600 corpus",
+    )
+    analyze_rdx004.add_argument("--study4-evaluation-dir", required=True, type=Path)
+    analyze_rdx004.add_argument("--preflight-dir", required=True, type=Path)
+    analyze_rdx004.add_argument("--run-root", required=True, type=Path)
+    analyze_rdx004.add_argument("--output-dir", required=True, type=Path)
+    analyze_rdx004.set_defaults(handler=_analyze_rdx004_training_evidence)
+
+    preflight_rdx004 = subparsers.add_parser(
+        "preflight-rdx004-training-evidence",
+        help="construct and validate the artifact-only RDX-004 24-run preflight",
+    )
+    preflight_rdx004.add_argument("--config", required=True, type=Path)
+    preflight_rdx004.add_argument("--study4-evaluation-root", type=Path)
+    preflight_rdx004.add_argument("--manifest-root", type=Path)
+    preflight_rdx004.add_argument("--output-dir", required=True, type=Path)
+    preflight_rdx004.set_defaults(handler=_preflight_rdx004_training_evidence)
+
+    run_rdx004 = subparsers.add_parser(
+        "run-rdx004-training-evidence",
+        help="explicitly execute one authorized RDX-004 B400/B1600 run",
+    )
+    run_rdx004.add_argument("--execution-config", required=True, type=Path)
+    run_rdx004.add_argument("--datasets-config", required=True, type=Path)
+    run_rdx004.add_argument("--preflight-dir", required=True, type=Path)
+    run_rdx004.add_argument(
+        "--budget",
+        required=True,
+        type=RDX004Budget,
+        choices=[RDX004Budget.B400, RDX004Budget.B1600],
+    )
+    run_rdx004.add_argument(
+        "--rotation",
+        required=True,
+        nargs=4,
+        choices=["U", "T", "C", "B"],
+        metavar=("D1", "D2", "D3", "D4"),
+    )
+    run_rdx004.add_argument("--seed", required=True, type=int, choices=[42, 43, 44])
+    run_rdx004.add_argument("--manifest-dir", required=True, type=Path)
+    run_rdx004.add_argument(
+        "--output-root",
+        required=True,
+        type=Path,
+        help="repository/output root; the frozen confirmatory or smoke namespace is appended",
+    )
+    run_rdx004.add_argument("--device", default="auto")
+    run_rdx004.add_argument("--smoke", action="store_true")
+    run_rdx004.add_argument("--execute", action="store_true")
+    run_rdx004.set_defaults(handler=_run_rdx004_training_evidence)
+
     run_policy = subparsers.add_parser(
         "run-policy-development",
         help="run one POLICY_DEVELOPMENT_V1 rotation/seed/roll-in unit",
@@ -851,6 +1005,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (FileNotFoundError, OSError, TypeError, ValueError, Study5BLauncherError) as exc:
+    except (
+        FileNotFoundError,
+        OSError,
+        TypeError,
+        ValueError,
+        Study5BLauncherError,
+        RdxTrainingAnalysisError,
+        RdxTrainingEvidencePreflightError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

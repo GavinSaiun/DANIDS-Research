@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
@@ -92,6 +92,15 @@ class PolicyObservation:
 
     def to_dict(self) -> dict[str, float | int | bool | None]:
         return dict(self.health_information)
+
+
+class PolicyObservationCapability(Protocol):
+    """Minimal policy-safe observation surface consumed by an executor."""
+
+    @property
+    def remaining_label_budget(self) -> int: ...
+
+    def to_dict(self) -> dict[str, float | int | bool | None]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,19 +233,27 @@ def _adaptation_config(
     )
 
 
-def _require_released(target: ReleasedLabelBatch | None) -> ReleasedLabelBatch:
+def _require_released(
+    target: ReleasedLabelBatch | None, *, maximum_rows: int = 100
+) -> ReleasedLabelBatch:
     if not isinstance(target, ReleasedLabelBatch):
         raise TypeError("Study-4 adaptation requires labels released by the delayed queue")
     if len(target) == 0:
         raise ValueError("released target batch is empty")
-    if len(target) > 100:
-        raise ValueError("released target batch exceeds the 100-label domain budget")
+    if type(maximum_rows) is not int or maximum_rows <= 0:
+        raise ValueError("released target row limit must be positive")
+    if len(target) > maximum_rows:
+        if maximum_rows == 100:
+            raise ValueError("released target batch exceeds the 100-label domain budget")
+        raise ValueError(f"released target batch exceeds the {maximum_rows}-row capability")
     return target
 
 
-def _require_calibration(value: PermittedCalibration | None) -> PermittedCalibration:
+def _require_calibration(
+    value: PermittedCalibration | None, *, maximum_rows: int = 100
+) -> PermittedCalibration:
     if isinstance(value, ReleasedLabelBatch):
-        return _require_released(value)
+        return _require_released(value, maximum_rows=maximum_rows)
     if isinstance(value, ValidationSet):
         if len(value) == 0:
             raise ValueError("source validation calibration set is empty")
@@ -382,12 +399,53 @@ class InterventionExecutor:
         labels_requested: int = 0,
         calibration: PermittedCalibration | None = None,
     ) -> InterventionOutcome:
+        """Execute the frozen Study-4 B100 capability with its original limits."""
+
+        return self._attempt_with_limits(
+            action,
+            deployed,
+            observation,
+            evaluator,
+            target=target,
+            memory=memory,
+            audit_references=audit_references,
+            device=device,
+            seed=seed,
+            labels_requested=labels_requested,
+            calibration=calibration,
+            target_row_limit=100,
+            requested_label_limit=100,
+        )
+
+    def _attempt_with_limits(
+        self,
+        action: InterventionAction,
+        deployed: DeployedState,
+        observation: PolicyObservationCapability,
+        evaluator: EvaluatorMetadata,
+        *,
+        target: ReleasedLabelBatch | None,
+        memory: ReplayAuditMemory,
+        audit_references: dict[str, AuditReference],
+        device: torch.device,
+        seed: int,
+        labels_requested: int,
+        calibration: PermittedCalibration | None,
+        target_row_limit: int,
+        requested_label_limit: int,
+    ) -> InterventionOutcome:
+        """Shared implementation used only by strict, versioned capability wrappers."""
+
         if evaluator.sequence != self.config.experiment.sequence:
             raise ValueError("evaluator sequence differs from Study-4 config")
         if evaluator.seed != self.config.experiment.seed or seed != evaluator.seed:
             raise ValueError("intervention seed differs from Study-4 config/evaluator metadata")
-        if not 0 <= labels_requested <= 100:
-            raise ValueError("labels_requested must lie in [0, 100]")
+        if type(target_row_limit) is not int or target_row_limit <= 0:
+            raise ValueError("target row limit must be a positive integer")
+        if type(requested_label_limit) is not int or requested_label_limit <= 0:
+            raise ValueError("requested-label limit must be a positive integer")
+        if not 0 <= labels_requested <= requested_label_limit:
+            raise ValueError(f"labels_requested must lie in [0, {requested_label_limit}]")
         before_model = deployed.model_digest
         before_preprocessor = deployed.preprocessor_digest
         before_threshold = deployed.threshold_digest
@@ -404,7 +462,8 @@ class InterventionExecutor:
                 pass
             elif action is InterventionAction.RECALIBRATE:
                 calibration_used = _require_calibration(
-                    calibration if calibration is not None else target
+                    calibration if calibration is not None else target,
+                    maximum_rows=target_row_limit,
                 )
                 candidate_threshold = self._recalibrate(
                     candidate_model,
@@ -416,7 +475,7 @@ class InterventionExecutor:
                 adaptation = adapt_head_only(
                     candidate_model,
                     deployed.preprocessor,
-                    _require_released(target),
+                    _require_released(target, maximum_rows=target_row_limit),
                     _adaptation_config(self.config, "naive_ft"),
                     device=device,
                     seed=seed,
@@ -425,7 +484,7 @@ class InterventionExecutor:
                 adaptation = adapt_naive_ft(
                     candidate_model,
                     deployed.preprocessor,
-                    _require_released(target),
+                    _require_released(target, maximum_rows=target_row_limit),
                     _adaptation_config(self.config, "naive_ft"),
                     device=device,
                     seed=seed,
@@ -437,7 +496,7 @@ class InterventionExecutor:
                 adaptation = adapt_er(
                     candidate_model,
                     deployed.preprocessor,
-                    _require_released(target),
+                    _require_released(target, maximum_rows=target_row_limit),
                     replay,
                     _adaptation_config(self.config, "er"),
                     device=device,
@@ -550,6 +609,7 @@ __all__ = [
     "InterventionRecord",
     "PermittedCalibration",
     "PolicyObservation",
+    "PolicyObservationCapability",
     "replay_flat_positions_digest",
     "replay_scoped_positions_digest",
     "scoped_replay_positions_provenance",
